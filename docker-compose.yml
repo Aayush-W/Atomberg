@@ -1,0 +1,64 @@
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: goalforge-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+  backend:
+    build:
+      context: ./goalforge/backend
+      dockerfile: Dockerfile
+    container_name: goalforge-backend
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET}
+      PORT: ${BACKEND_PORT}
+    ports:
+      - "${BACKEND_PORT}:4000"
+    depends_on:
+      - postgres
+
+  frontend:
+    build:
+      context: ./goalforge/frontend
+      dockerfile: Dockerfile
+    container_name: goalforge-frontend
+    restart: unless-stopped
+    env_file:
+      - ./goalforge/frontend/.env
+    environment:
+      VITE_API_URL: ${VITE_API_URL}
+    ports:
+      - "${FRONTEND_PORT}:5173"
+    depends_on:
+      - backend
+
+  ml-service:
+    build:
+      context: ./goalforge/ml-service
+      dockerfile: Dockerfile
+    container_name: goalforge-ml-service
+    restart: unless-stopped
+    env_file:
+      - ./goalforge/ml-service/.env
+    environment:
+      ML_SERVICE_PORT: ${ML_SERVICE_PORT}
+    ports:
+      - "${ML_SERVICE_PORT}:8000"
+    depends_on:
+      - backend
+
+volumes:
+  postgres-data:

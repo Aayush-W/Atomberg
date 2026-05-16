@@ -1,0 +1,167 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --sidebar-width: 260px;
+  }
+
+  * {
+    @apply border-surface-200 dark:border-surface-800;
+  }
+
+  html {
+    @apply scroll-smooth antialiased;
+  }
+
+  body {
+    @apply bg-surface-50 text-slate-800 dark:bg-surface-950 dark:text-slate-100 font-sans;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-display;
+  }
+
+  ::-webkit-scrollbar {
+    @apply w-1.5 h-1.5;
+  }
+
+  ::-webkit-scrollbar-track {
+    @apply bg-transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    @apply bg-surface-300 dark:bg-surface-700 rounded-full;
+  }
+}
+
+@layer components {
+  /* Glass card */
+  .glass {
+    @apply bg-white/70 dark:bg-surface-900/70 backdrop-blur-md border border-white/20 dark:border-surface-700/50;
+  }
+
+  /* Premium card */
+  .card {
+    @apply bg-white dark:bg-surface-900 rounded-2xl border border-surface-200 dark:border-surface-800 shadow-sm;
+  }
+
+  /* Sidebar */
+  .sidebar {
+    @apply fixed top-0 left-0 h-full w-[260px] bg-surface-900 dark:bg-surface-950 border-r border-surface-800 flex flex-col z-30;
+  }
+
+  /* Gradient text */
+  .text-gradient {
+    @apply bg-gradient-to-r from-brand-500 to-purple-500 bg-clip-text text-transparent;
+  }
+
+  /* Status badges */
+  .badge {
+    @apply inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold;
+  }
+  .badge-draft      { @apply bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300; }
+  .badge-submitted  { @apply bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300; }
+  .badge-approved   { @apply bg-success-500/10 text-success-600 dark:text-success-400; }
+  .badge-rejected   { @apply bg-danger-500/10 text-danger-600 dark:text-danger-400; }
+  .badge-locked     { @apply bg-purple-100 text-purple-700 dark:bg-purple-900/50 dark:text-purple-300; }
+
+  /* Form elements */
+  .input {
+    @apply w-full px-3.5 py-2.5 rounded-xl bg-surface-50 dark:bg-surface-800 border border-surface-200 dark:border-surface-700
+           text-sm text-slate-800 dark:text-slate-100 placeholder-slate-400
+           focus:outline-none focus:ring-2 focus:ring-brand-500/50 focus:border-brand-500
+           transition-all duration-150;
+  }
+
+  .label {
+    @apply block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1.5;
+  }
+
+  /* Buttons */
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold
+           transition-all duration-150 disabled:opacity-50 disabled:pointer-events-none;
+  }
+  .btn-primary {
+    @apply btn bg-brand-600 hover:bg-brand-700 text-white shadow-sm shadow-brand-500/20;
+  }
+  .btn-secondary {
+    @apply btn bg-surface-100 hover:bg-surface-200 dark:bg-surface-800 dark:hover:bg-surface-700 text-slate-700 dark:text-slate-200;
+  }
+  .btn-danger {
+    @apply btn bg-danger-500 hover:bg-danger-600 text-white;
+  }
+  .btn-ghost {
+    @apply btn bg-transparent hover:bg-surface-100 dark:hover:bg-surface-800 text-slate-600 dark:text-slate-300;
+  }
+  .btn-sm {
+    @apply px-3 py-1.5 text-xs rounded-lg;
+  }
+  .btn-lg {
+    @apply px-6 py-3 text-base rounded-2xl;
+  }
+
+  /* Table */
+  .table-container {
+    @apply w-full overflow-x-auto rounded-xl border border-surface-200 dark:border-surface-800;
+  }
+
+  table.data-table {
+    @apply w-full text-sm;
+  }
+
+  table.data-table thead tr {
+    @apply bg-surface-50 dark:bg-surface-800/60;
+  }
+
+  table.data-table thead th {
+    @apply px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400;
+  }
+
+  table.data-table tbody tr {
+    @apply border-t border-surface-100 dark:border-surface-800 hover:bg-surface-50 dark:hover:bg-surface-800/40 transition-colors;
+  }
+
+  table.data-table tbody td {
+    @apply px-4 py-3 text-slate-700 dark:text-slate-200;
+  }
+
+  /* Progress bar */
+  .progress-bar {
+    @apply h-2 rounded-full bg-surface-200 dark:bg-surface-700 overflow-hidden;
+  }
+
+  .progress-fill {
+    @apply h-full rounded-full transition-all duration-500;
+  }
+
+  /* Animations */
+  .animate-fade-in {
+    animation: fadeIn 0.25s ease-in-out;
+  }
+  .animate-slide-in {
+    animation: slideInRight 0.3s ease-out;
+  }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slideInRight {
+  from { opacity: 0; transform: translateX(20px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes pulse-ring {
+  0%   { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(239,68,68,0.4); }
+  70%  { transform: scale(1);    box-shadow: 0 0 0 8px rgba(239,68,68,0); }
+  100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(239,68,68,0); }
+}
+
+.pulse-danger {
+  animation: pulse-ring 2s ease-in-out infinite;
+}

@@ -122,21 +122,6 @@ Atomberg/
 
 ## Environment Variables
 
-### Root `.env`
-
-```env
-POSTGRES_USER=goalforge
-POSTGRES_PASSWORD=goalforgepass
-POSTGRES_DB=goalforge
-POSTGRES_HOST=postgres
-BACKEND_PORT=4000
-FRONTEND_PORT=5173
-ML_SERVICE_PORT=8000
-JWT_SECRET=supersecretkey
-JWT_REFRESH_SECRET=refreshsecretkey
-DATABASE_URL=postgresql://goalforge:goalforgepass@postgres:5432/goalforge
-VITE_API_URL=http://localhost:4000
-```
 
 ### `server/.env`
 

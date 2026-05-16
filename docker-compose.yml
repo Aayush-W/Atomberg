@@ -14,7 +14,7 @@ services:
 
   backend:
     build:
-      context: ./goalforge/backend
+      context: ./server
       dockerfile: Dockerfile
     container_name: goalforge-backend
     restart: unless-stopped
@@ -32,12 +32,12 @@ services:
 
   frontend:
     build:
-      context: ./goalforge/frontend
+      context: ./client
       dockerfile: Dockerfile
     container_name: goalforge-frontend
     restart: unless-stopped
     env_file:
-      - ./goalforge/frontend/.env
+      - ./client/.env
     environment:
       VITE_API_URL: ${VITE_API_URL}
     ports:
@@ -47,12 +47,12 @@ services:
 
   ml-service:
     build:
-      context: ./goalforge/ml-service
+      context: ./ml-service
       dockerfile: Dockerfile
     container_name: goalforge-ml-service
     restart: unless-stopped
     env_file:
-      - ./goalforge/ml-service/.env
+      - ./ml-service/.env
     environment:
       ML_SERVICE_PORT: ${ML_SERVICE_PORT}
     ports:

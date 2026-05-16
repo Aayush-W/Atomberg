@@ -4,7 +4,7 @@ Based on the provided `prompt.md` and `action_plan.md`, here is the analysis of 
 
 ## 1. Project Analysis & Current Progress
 
-I have reviewed the project directory (`c:/Users/Aayush Walsangikar/OneDrive/Desktop/Atomberg/goalforge/`) and compared it against the 16-step action plan.
+I have reviewed the project directory (`c:/Users/Aayush Walsangikar/OneDrive/Desktop/Atomberg/`) and compared it against the 16-step action plan.
 
 ### What is Completed:
 - **Step 1 (Foundation):** Docker compose file is present. Backend and ML Service basic skeleton files (`package.json`, `requirements.txt`, `.env`) are created.

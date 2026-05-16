@@ -37,8 +37,18 @@ const AdminMLInsights = lazy(() => import('@/pages/admin/MLInsightsPage'));
 // ─── Route Guards ────────────────────────────────────────────────────────────
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
-  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
-  if (!isAuthenticated) return <Navigate to="/login" replace />;
+  const { isAuthenticated, user, logout } = useAuthStore();
+  
+  if (!isAuthenticated) {
+    return <Navigate to="/login" replace />;
+  }
+  
+  if (!user) {
+    // Session state mismatch - force logout and redirect
+    logout();
+    return <Navigate to="/login" replace />;
+  }
+
   return <>{children}</>;
 }
 

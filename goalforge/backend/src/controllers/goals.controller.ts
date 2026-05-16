@@ -95,7 +95,10 @@ function updateGoalData(body: UpdateGoalInput): Prisma.GoalUpdateInput {
 
 export const listOwnGoals = asyncHandler(async (req: Request, res: Response) => {
   const user = currentUser(req);
-  const cycle = await getActiveCycleOrThrow();
+  const cycle = await prisma.cycle.findFirst({ where: { isActive: true }, orderBy: { startDate: 'desc' } });
+  if (!cycle) {
+    return res.json({ goals: [] });
+  }
   const goals = await prisma.goal.findMany({
     where: { userId: user.id, cycleId: cycle.id },
     include: goalInclude,
@@ -399,21 +402,11 @@ export const getDependencyGraph = asyncHandler(async (req: Request, res: Respons
   });
 
   res.json({
-    nodes: goals.map((goal) => ({
-      id: goal.id,
-      employeeName: goal.user.name,
-      department: goal.user.department,
-      title: goal.title,
-      thrustArea: goal.thrustArea,
-      status: goal.status,
-      isShared: goal.isShared,
+    goals: goals.map((goal) => ({
+      ...goal,
       progressScore: goal.checkIns.at(-1)?.progressScore ?? 0
     })),
-    edges: dependencies.map((dependency) => ({
-      id: dependency.id,
-      source: dependency.requiredGoalId,
-      target: dependency.dependentGoalId
-    }))
+    dependencies
   });
 });
 
@@ -444,4 +437,11 @@ export const addDependency = asyncHandler(async (req: Request<{ id: string }, un
   });
 
   res.status(201).json({ dependency });
+});
+
+export const getGoal = asyncHandler(async (req: Request<{ id: string }>, res: Response) => {
+  const user = currentUser(req);
+  const goal = await findGoalOrThrow(req.params.id);
+  await ensureUserCanAccessGoal(user, goal);
+  res.json({ goal });
 });

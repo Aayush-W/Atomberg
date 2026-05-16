@@ -117,7 +117,7 @@ export default function Navbar() {
         {/* User avatar */}
         <div className="flex items-center gap-2 pl-2 border-l border-surface-200 dark:border-surface-700">
           <div className="w-8 h-8 rounded-full bg-brand-600 flex items-center justify-center text-white text-sm font-bold">
-            {user?.name.charAt(0)}
+            {user?.name?.charAt(0) ?? '?'}
           </div>
           <div className="hidden md:block">
             <p className="text-sm font-medium text-slate-700 dark:text-slate-200 leading-none">

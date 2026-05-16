@@ -11,12 +11,16 @@ const THRUST_AREAS = ['Innovation', 'Revenue Growth', 'Operational Excellence'];
 const UOM_TYPES: UoMType[] = ['MIN', 'MAX', 'TIMELINE', 'ZERO'];
 
 export default function SharedGoalsPage() {
-  const user = useAuthStore((s) => s.user)!;
+  const user = useAuthStore((s) => s.user);
   const qc = useQueryClient();
   const [form, setForm] = useState({ thrustArea: '', title: '', description: '', uomType: 'MIN' as UoMType, target: 0 });
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
-  const { data: team = [], isLoading } = useQuery({ queryKey: ['team', user.id], queryFn: () => usersService.getTeam(user.id) });
+  const { data: team = [], isLoading } = useQuery({ 
+    queryKey: ['team', user?.id], 
+    queryFn: () => usersService.getTeam(user?.id ?? ''),
+    enabled: !!user?.id
+  });
   const { data: teamGoals = [] } = useQuery({ queryKey: ['team-goals'], queryFn: goalsService.getTeam });
 
   const pushMut = useMutation({
@@ -30,7 +34,7 @@ export default function SharedGoalsPage() {
     onError: (e: any) => toast.error(e?.response?.data?.error?.message ?? 'Failed'),
   });
 
-  if (isLoading) return <div className="flex items-center justify-center h-64"><Spinner size={32}/></div>;
+  if (!user || isLoading) return <div className="flex items-center justify-center h-64"><Spinner size={32}/></div>;
 
   const toggleUser = (id: string) => setSelectedIds((p) => p.includes(id) ? p.filter((x) => x !== id) : [...p, id]);
 

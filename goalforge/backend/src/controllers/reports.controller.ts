@@ -85,44 +85,38 @@ export const getCompletionReport = asyncHandler(async (req: Request, res: Respon
     throw forbidden('Only managers and admins can view completion reports');
   }
 
-  const goals = await prisma.goal.findMany({
-    where: { cycle: { isActive: true }, ...scopeGoals(user) },
+  const employees = await prisma.user.findMany({
+    where: { 
+      role: Role.EMPLOYEE,
+      ...(user.role === Role.MANAGER ? { managerId: user.id } : {})
+    },
     include: {
-      user: { select: { id: true, name: true, department: true, managerId: true } },
-      checkIns: { orderBy: { createdAt: 'desc' } }
+      manager: { select: { name: true } },
+      goals: {
+        where: { cycle: { isActive: true } },
+        include: { checkIns: true }
+      }
     }
   });
 
-  const goalRows = goals.map((goal) => ({
-    goalId: goal.id,
-    title: goal.title,
-    status: goal.status,
-    employee: goal.user.name,
-    department: goal.user.department,
-    locked: goal.status === 'LOCKED',
-    latestProgress: latestProgress(goal.checkIns),
-    checkIns: goal.checkIns.length,
-    completionStatus: goal.status === 'LOCKED' || goal.status === 'APPROVED' ? 'COMPLETED' : 'IN_PROGRESS'
-  }));
+  const report = employees.map((emp) => {
+    const goals = emp.goals;
+    const submitted = goals.length > 0 && goals.some((g) => g.status !== 'DRAFT');
+    const approved = goals.length > 0 && goals.every((g) => g.status === 'APPROVED' || g.status === 'LOCKED');
+    
+    return {
+      employeeName: emp.name,
+      manager: emp.manager?.name ?? 'N/A',
+      goalsSubmitted: submitted,
+      goalsApproved: approved,
+      q1Done: goals.some((g) => g.checkIns.some((ci) => ci.quarter === 'Q1')),
+      q2Done: goals.some((g) => g.checkIns.some((ci) => ci.quarter === 'Q2')),
+      q3Done: goals.some((g) => g.checkIns.some((ci) => ci.quarter === 'Q3')),
+      q4Done: goals.some((g) => g.checkIns.some((ci) => ci.quarter === 'Q4')),
+    };
+  });
 
-  const departmentStats = Array.from(
-    goalRows.reduce((acc, row) => {
-      const current = acc.get(row.department) ?? { department: row.department, goals: 0, completed: 0, averageProgress: 0, totalProgress: 0 };
-      current.goals += 1;
-      if (row.completionStatus === 'COMPLETED') current.completed += 1;
-      current.totalProgress += row.latestProgress;
-      acc.set(row.department, current);
-      return acc;
-    }, new Map<string, any>()).values()
-  ).map((entry: any) => ({
-    department: entry.department,
-    goals: entry.goals,
-    completed: entry.completed,
-    completionRate: entry.goals ? Number(((entry.completed / entry.goals) * 100).toFixed(2)) : 0,
-    averageProgress: entry.goals ? Number((entry.totalProgress / entry.goals).toFixed(2)) : 0
-  }));
-
-  res.json({ goals: goalRows, departmentStats });
+  res.json({ report });
 });
 
 export const getManagerEffectivenessReport = asyncHandler(async (req: Request, res: Response) => {

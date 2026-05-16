@@ -12,63 +12,66 @@ export const authService = {
   login: (email: string, password: string) => api.post('/auth/login', { email, password }).then((r: any) => r.data),
   refresh: (token: string) => api.post('/auth/refresh', { refreshToken: token }).then((r: any) => r.data),
   logout: () => api.post('/auth/logout'),
-  me: () => api.get('/auth/me').then((r: any) => r.data as User),
+  me: () => api.get('/auth/me').then((r: any) => r.data.user as User),
 };
 
 // ─── Users ────────────────────────────────────────────────────────────────────
 export const usersService = {
-  getAll: () => api.get('/users').then((r: any) => r.data as User[]),
-  getTeam: (managerId: string) => api.get(`/users/team/${managerId}`).then((r: any) => r.data as User[]),
-  getById: (id: string) => api.get(`/users/${id}`).then((r: any) => r.data as User),
-  create: (data: Partial<User> & { password?: string }) => api.post('/users', data).then((r: any) => r.data),
-  update: (id: string, data: Partial<User>) => api.put(`/users/${id}`, data).then((r: any) => r.data),
+  getAll: () => api.get('/users').then((r: any) => r.data.users as User[]),
+  getTeam: (managerId: string) => api.get(`/users/team/${managerId}`).then((r: any) => r.data.users as User[]),
+  getById: (id: string) => api.get(`/users/${id}`).then((r: any) => r.data.user as User),
+  create: (data: Partial<User> & { password?: string }) => api.post('/users', data).then((r: any) => r.data.user),
+  update: (id: string, data: Partial<User>) => api.put(`/users/${id}`, data).then((r: any) => r.data.user),
 };
 
 // ─── Cycles ───────────────────────────────────────────────────────────────────
 export const cyclesService = {
-  getAll: () => api.get('/cycles').then((r: any) => r.data as Cycle[]),
-  getActive: () => api.get('/cycles/active').then((r: any) => r.data as Cycle),
-  getStatus: (id: string) => api.get(`/cycles/${id}/status`).then((r: any) => r.data),
-  create: (data: Partial<Cycle>) => api.post('/cycles', data).then((r: any) => r.data),
-  update: (id: string, data: Partial<Cycle>) => api.put(`/cycles/${id}`, data).then((r: any) => r.data),
+  getAll: () => api.get('/cycles').then((r: any) => r.data.cycles as Cycle[]),
+  getActive: () => api.get('/cycles/active').then((r: any) => r.data.cycle as Cycle),
+  getStatus: (id: string) => api.get(`/cycles/${id}/status`).then((r: any) => r.data.status),
+  create: (data: Partial<Cycle>) => api.post('/cycles', data).then((r: any) => r.data.cycle),
+  update: (id: string, data: Partial<Cycle>) => api.put(`/cycles/${id}`, data).then((r: any) => r.data.cycle),
 };
 
 // ─── Goals ────────────────────────────────────────────────────────────────────
 export const goalsService = {
-  getMine: () => api.get('/goals/mine').then((r: any) => r.data as Goal[]),
-  getTeam: () => api.get('/goals/team').then((r: any) => r.data as Goal[]),
-  getAll: () => api.get('/goals/all').then((r: any) => r.data as Goal[]),
-  getById: (id: string) => api.get(`/goals/${id}`).then((r: any) => r.data as Goal),
-  create: (data: Partial<Goal>) => api.post('/goals', data).then((r: any) => r.data),
-  update: (id: string, data: Partial<Goal>) => api.put(`/goals/${id}`, data).then((r: any) => r.data),
+  getMine: () => api.get('/goals').then((r: any) => r.data.goals as Goal[] || []),
+  getTeam: () => api.get('/goals/team').then((r: any) => r.data.goals as Goal[]),
+  getAll: () => api.get('/goals/all').then((r: any) => r.data.goals as Goal[]),
+  getById: (id: string) => api.get(`/goals/${id}`).then((r: any) => r.data.goal as Goal),
+  create: (data: Partial<Goal>) => api.post('/goals', data).then((r: any) => r.data.goal),
+  update: (id: string, data: Partial<Goal>) => api.put(`/goals/${id}`, data).then((r: any) => r.data.goal),
   delete: (id: string) => api.delete(`/goals/${id}`),
-  submit: (id: string) => api.post(`/goals/${id}/submit`).then((r: any) => r.data),
-  approve: (id: string) => api.post(`/goals/${id}/approve`).then((r: any) => r.data),
-  reject: (id: string, comment: string) => api.post(`/goals/${id}/reject`, { comment }).then((r: any) => r.data),
-  lock: (id: string) => api.post(`/goals/${id}/lock`).then((r: any) => r.data),
-  unlock: (id: string) => api.post(`/goals/${id}/unlock`).then((r: any) => r.data),
-  pushShared: (data: any) => api.post('/goals/shared', data).then((r: any) => r.data),
+  submit: (id: string) => api.post(`/goals/${id}/submit`).then((r: any) => r.data.goal),
+  approve: (id: string) => api.post(`/goals/${id}/approve`).then((r: any) => r.data.goal),
+  reject: (id: string, comment: string) => api.post(`/goals/${id}/reject`, { comment }).then((r: any) => r.data.goal),
+  lock: (id: string) => api.post(`/goals/${id}/lock`).then((r: any) => r.data.goal),
+  unlock: (id: string) => api.post(`/goals/${id}/unlock`).then((r: any) => r.data.goal),
+  pushShared: (data: { userIds: string[]; [key: string]: any }) => {
+    const { userIds, ...rest } = data;
+    return api.post('/goals/shared', { ...rest, employeeIds: userIds }).then((r: any) => r.data.goals);
+  },
   getDependencyGraph: () => api.get('/goals/dependency-graph').then((r: any) => r.data),
 };
 
 // ─── Check-ins ────────────────────────────────────────────────────────────────
 export const checkinsService = {
-  create: (data: Partial<CheckIn>) => api.post('/checkins', data).then((r: any) => r.data),
-  getMine: () => api.get('/checkins/mine').then((r: any) => r.data as CheckIn[]),
-  addManagerComment: (id: string, comment: string) => api.put(`/checkins/${id}/comment`, { comment }).then((r: any) => r.data),
+  create: (data: Partial<CheckIn>) => api.post('/checkins', data).then((r: any) => r.data.checkIn),
+  addManagerComment: (id: string, comment: string) => api.put(`/checkins/${id}`, { managerComment: comment }).then((r: any) => r.data.checkIn),
 };
 
 // ─── Reports ──────────────────────────────────────────────────────────────────
 export const reportsService = {
-  getAchievement: () => api.get('/reports/achievement').then((r: any) => r.data),
-  getCompletionDashboard: () => api.get('/reports/completion-dashboard').then((r: any) => r.data),
+  getAchievement: () => api.get('/reports/achievement').then((r: any) => r.data.report || []),
+  getCompletionDashboard: () => api.get('/reports/completion').then((r: any) => r.data.report || []),
+  getDepartmentSummary: () => api.get('/reports/completion').then((r: any) => r.data.report || []),
   exportAchievement: (format: 'csv' | 'excel') =>
     api.get(`/reports/achievement/export`, { params: { format }, responseType: 'blob' }).then((r: any) => r.data as Blob),
 };
 
 // ─── Notifications ────────────────────────────────────────────────────────────
 export const notificationsService = {
-  getAll: () => api.get('/notifications').then((r: any) => r.data as Notification[]),
+  getAll: () => api.get('/notifications').then((r: any) => r.data.notifications as Notification[] || []),
   markRead: (id: string) => api.put(`/notifications/${id}/read`),
   markAllRead: () => api.put('/notifications/read-all'),
 };

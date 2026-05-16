@@ -47,7 +47,7 @@ const navItems: NavItem[] = [
 const DEMO_ACCOUNTS = [
   { label: 'Admin',    email: 'admin@goalforge.com',    password: 'Admin@123',    role: 'ADMIN' as Role },
   { label: 'Manager 1', email: 'manager1@goalforge.com', password: 'Manager@123', role: 'MANAGER' as Role },
-  { label: 'Employee 1', email: 'emp1@goalforge.com',    password: 'Employee@123', role: 'EMPLOYEE' as Role },
+  { label: 'Employee 1', email: 'alice@goalforge.com',    password: 'Employee@123', role: 'EMPLOYEE' as Role },
 ];
 
 export default function Sidebar() {

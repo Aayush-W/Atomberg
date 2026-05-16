@@ -7,12 +7,20 @@ import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianG
 const COLORS = ['#5b6ef3', '#22c55e', '#f59e0b', '#ef4444', '#8b5cf6'];
 
 export default function ManagerAnalytics() {
-  const user = useAuthStore((s) => s.user)!;
-  const { data: team = [] } = useQuery({ queryKey: ['team', user.id], queryFn: () => usersService.getTeam(user.id) });
+  const user = useAuthStore((s) => s.user);
+  const { data: team = [] } = useQuery({ 
+    queryKey: ['team', user?.id], 
+    queryFn: () => usersService.getTeam(user?.id ?? ''),
+    enabled: !!user?.id
+  });
   const { data: teamGoals = [], isLoading, error, refetch } = useQuery({ queryKey: ['team-goals'], queryFn: goalsService.getTeam });
-  const { data: sentimentTrends } = useQuery({ queryKey: ['sentiment-trends', user.id], queryFn: () => mlService.getSentimentTrends(user.id) });
+  const { data: sentimentTrends } = useQuery({ 
+    queryKey: ['sentiment-trends', user?.id], 
+    queryFn: () => mlService.getSentimentTrends(user?.id ?? ''),
+    enabled: !!user?.id
+  });
 
-  if (isLoading) return <div className="flex items-center justify-center h-64"><Spinner size={32}/></div>;
+  if (!user || isLoading) return <div className="flex items-center justify-center h-64"><Spinner size={32}/></div>;
   if (error) return <ErrorState onRetry={refetch}/>;
 
   // QoQ data per team member

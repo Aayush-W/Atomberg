@@ -6,7 +6,7 @@ import { Target, CheckSquare, TrendingUp, AlertCircle, Plus, ClipboardCheck } fr
 import { Link } from 'react-router-dom';
 
 export default function EmployeeDashboard() {
-  const user = useAuthStore((s) => s.user)!;
+  const user = useAuthStore((s) => s.user);
 
   const { data: goals = [], isLoading, error, refetch } = useQuery({
     queryKey: ['my-goals'],
@@ -16,20 +16,22 @@ export default function EmployeeDashboard() {
     queryKey: ['cycle-status'],
     queryFn: async () => {
       const cycle = await cyclesService.getActive();
+      if (!cycle) return null;
       return cyclesService.getStatus(cycle.id);
     },
   });
   const { data: predictions = [] } = useQuery({
-    queryKey: ['ml-predictions', user.id],
+    queryKey: ['ml-predictions', user?.id],
     queryFn: async () => {
       const cycle = await cyclesService.getActive();
-      return mlService.predictAchievement(user.id, cycle.id);
+      if (!cycle) return [];
+      return mlService.predictAchievement(user?.id ?? '', cycle.id);
     },
   });
   const { data: anomalies = [] } = useQuery({ queryKey: ['anomalies'], queryFn: mlService.getAnomalies });
-  const myAnomaly = anomalies.find((a) => a.userId === user.id && a.isAnomaly);
+  const myAnomaly = anomalies.find((a) => a.userId === user?.id && a.isAnomaly);
 
-  if (isLoading) return <div className="flex items-center justify-center h-64"><Spinner size={32} /></div>;
+  if (!user || isLoading) return <div className="flex items-center justify-center h-64"><Spinner size={32} /></div>;
   if (error) return <ErrorState onRetry={refetch} />;
 
   const approved = goals.filter((g) => ['APPROVED', 'LOCKED'].includes(g.status)).length;
@@ -38,7 +40,7 @@ export default function EmployeeDashboard() {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <PageHeader title={`Good day, ${user.name.split(' ')[0]} 👋`} subtitle="Your goal health overview"
+      <PageHeader title={`Good day, ${user?.name?.split(' ')[0] ?? 'User'} 👋`} subtitle="Your goal health overview"
         actions={<Link to="/employee/goals/new" className="btn-primary btn gap-2"><Plus size={16}/>Add Goal</Link>} />
 
       {cycleStatus?.activeQuarter && (

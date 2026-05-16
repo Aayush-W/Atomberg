@@ -6,6 +6,7 @@ import { Toaster } from 'react-hot-toast';
 import App from './App';
 import './index.css';
 import { useUIStore } from './stores/uiStore';
+import { ErrorBoundary } from './components/common';
 
 // Apply dark mode on initial load
 const { darkMode } = useUIStore.getState();
@@ -28,7 +29,9 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
         <Suspense fallback={<div className="h-screen w-screen flex items-center justify-center bg-surface-950">
           <div className="text-brand-500 text-xl font-display font-bold animate-pulse">GoalForge</div>
         </div>}>
-          <App />
+          <ErrorBoundary>
+            <App />
+          </ErrorBoundary>
         </Suspense>
         <Toaster
           position="top-right"

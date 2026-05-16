@@ -7,12 +7,16 @@ import toast from 'react-hot-toast';
 import { format } from 'date-fns';
 
 export default function TeamPage() {
-  const user = useAuthStore((s) => s.user)!;
+  const user = useAuthStore((s) => s.user);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [commentTexts, setCommentTexts] = useState<Record<string, string>>({});
   const qc = useQueryClient();
 
-  const { data: team = [], isLoading, error, refetch } = useQuery({ queryKey: ['team', user.id], queryFn: () => usersService.getTeam(user.id) });
+  const { data: team = [], isLoading, error, refetch } = useQuery({ 
+    queryKey: ['team', user?.id], 
+    queryFn: () => usersService.getTeam(user?.id ?? ''),
+    enabled: !!user?.id
+  });
   const { data: teamGoals = [] } = useQuery({ queryKey: ['team-goals'], queryFn: goalsService.getTeam });
 
   const commentMut = useMutation({
@@ -21,7 +25,7 @@ export default function TeamPage() {
     onError: (e: any) => toast.error(e?.response?.data?.error?.message ?? 'Failed'),
   });
 
-  if (isLoading) return <div className="flex items-center justify-center h-64"><Spinner size={32}/></div>;
+  if (!user || isLoading) return <div className="flex items-center justify-center h-64"><Spinner size={32}/></div>;
   if (error) return <ErrorState onRetry={refetch}/>;
 
   const selectedUser = team.find((u) => u.id === selectedUserId);

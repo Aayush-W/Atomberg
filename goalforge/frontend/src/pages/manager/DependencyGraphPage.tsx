@@ -39,15 +39,18 @@ export default function DependencyGraphPage() {
   const [selected, setSelected] = useState<Goal | null>(null);
 
   useEffect(() => {
-    if (!graphData) return;
-    const { goals, dependencies } = graphData as { goals: (Goal & { progressScore: number })[]; dependencies: any[] };
+    if (!graphData || !graphData.goals) return;
+    const { goals = [], dependencies = [] } = graphData as { 
+      goals: (Goal & { progressScore: number })[]; 
+      dependencies: any[] 
+    };
 
     const cols = 4;
     const newNodes: Node[] = goals.map((g, i) => ({
       id: g.id,
       type: 'goalNode',
       position: { x: (i % cols) * 280, y: Math.floor(i / cols) * 200 },
-      data: { ...g, progressScore: g.checkIns?.[0]?.progressScore ?? 0 },
+      data: { ...g, progressScore: g.progressScore ?? 0 },
     }));
 
     const newEdges: Edge[] = dependencies.map((d: any) => ({

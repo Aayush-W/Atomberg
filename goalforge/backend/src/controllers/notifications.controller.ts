@@ -8,7 +8,7 @@ export const getNotifications = async (req: Request, res: Response, next: NextFu
       orderBy: { createdAt: 'desc' },
       take: 50,
     });
-    res.json(notifications);
+    res.json({ notifications });
   } catch (err) { next(err); }
 };
 

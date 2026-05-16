@@ -28,7 +28,11 @@ export default function CheckInPage() {
   const { data: goals = [], isLoading, error, refetch } = useQuery({ queryKey: ['my-goals'], queryFn: goalsService.getMine });
   const { data: cycleStatus } = useQuery({
     queryKey: ['cycle-status'],
-    queryFn: async () => { const c = await cyclesService.getActive(); return cyclesService.getStatus(c.id); },
+    queryFn: async () => { 
+      const c = await cyclesService.getActive(); 
+      if (!c) return null;
+      return cyclesService.getStatus(c.id); 
+    },
   });
 
   const submitMut = useMutation({

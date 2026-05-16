@@ -6,13 +6,17 @@ import { Users, ClipboardCheck, TrendingUp, AlertTriangle } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 export default function ManagerDashboard() {
-  const user = useAuthStore((s) => s.user)!;
+  const user = useAuthStore((s) => s.user);
 
-  const { data: team = [], isLoading: teamLoading } = useQuery({ queryKey: ['team', user.id], queryFn: () => usersService.getTeam(user.id) });
+  const { data: team = [], isLoading: teamLoading } = useQuery({ 
+    queryKey: ['team', user?.id], 
+    queryFn: () => usersService.getTeam(user?.id ?? ''),
+    enabled: !!user?.id
+  });
   const { data: teamGoals = [], isLoading: goalsLoading, error, refetch } = useQuery({ queryKey: ['team-goals'], queryFn: goalsService.getTeam });
   const { data: anomalies = [] } = useQuery({ queryKey: ['anomalies'], queryFn: mlService.getAnomalies });
 
-  if (teamLoading || goalsLoading) return <div className="flex items-center justify-center h-64"><Spinner size={32}/></div>;
+  if (!user || teamLoading || goalsLoading) return <div className="flex items-center justify-center h-64"><Spinner size={32}/></div>;
   if (error) return <ErrorState onRetry={refetch}/>;
 
   const pending = teamGoals.filter((g) => g.status === 'SUBMITTED').length;
@@ -38,7 +42,7 @@ export default function ManagerDashboard() {
           <div className="space-y-2">
             {teamAnomalies.map((a) => (
               <div key={a.userId} className="flex items-center gap-3 p-3 rounded-xl bg-danger-500/10 border border-danger-500/20">
-                <div className="w-8 h-8 rounded-full bg-danger-500/20 flex items-center justify-center text-danger-400 font-bold text-sm">{a.userName.charAt(0)}</div>
+                <div className="w-8 h-8 rounded-full bg-danger-500/20 flex items-center justify-center text-danger-400 font-bold text-sm">{a.userName?.charAt(0) ?? '?'}</div>
                 <div>
                   <p className="text-sm font-semibold text-slate-800 dark:text-white">{a.userName}</p>
                   <p className="text-xs text-slate-400">{a.reason}</p>
@@ -85,7 +89,7 @@ export default function ManagerDashboard() {
               const avg = memberGoals.length ? memberGoals.reduce((s, g) => s + (g.checkIns?.[0]?.progressScore ?? 0), 0) / memberGoals.length : 0;
               return (
                 <div key={member.id} className="flex items-center gap-3">
-                  <div className="w-7 h-7 rounded-full bg-brand-600 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">{member.name.charAt(0)}</div>
+                  <div className="w-7 h-7 rounded-full bg-brand-600 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">{member.name?.charAt(0) ?? '?'}</div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between mb-1">
                       <p className="text-xs font-medium text-slate-700 dark:text-slate-200 truncate">{member.name}</p>

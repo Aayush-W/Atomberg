@@ -5,5 +5,5 @@ import { getNotifications, markRead, markAllRead } from '../controllers/notifica
 export const notificationsRouter = Router();
 notificationsRouter.use(requireAuth);
 notificationsRouter.get('/', getNotifications);
-notificationsRouter.put('/:id/read', markRead);
 notificationsRouter.put('/read-all', markAllRead);
+notificationsRouter.put('/:id/read', markRead);

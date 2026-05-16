@@ -31,4 +31,5 @@ goalsRouter.post('/:id/submit', validate(goalIdParamSchema, 'params'), goalsCont
 goalsRouter.post('/:id/approve', requireRole(Role.MANAGER, Role.ADMIN), validate(goalIdParamSchema, 'params'), validate(approveGoalSchema), goalsController.approveGoal);
 goalsRouter.post('/:id/reject', requireRole(Role.MANAGER, Role.ADMIN), validate(goalIdParamSchema, 'params'), validate(rejectGoalSchema), goalsController.rejectGoal);
 goalsRouter.post('/:id/unlock', requireRole(Role.ADMIN), validate(goalIdParamSchema, 'params'), goalsController.unlockGoal);
+goalsRouter.get('/:id', validate(goalIdParamSchema, 'params'), goalsController.getGoal);
 goalsRouter.post('/:id/dependency', validate(goalIdParamSchema, 'params'), validate(dependencySchema), goalsController.addDependency);

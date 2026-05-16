@@ -1,11 +1,14 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { reportsService } from '@/services/services';
 import { PageHeader, Spinner, ErrorState } from '@/components/common';
-import { Download } from 'lucide-react';
+import { Download, TrendingUp, Lock } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 export default function AdminReportsPage() {
-  const { data: report = [], isLoading, error, refetch } = useQuery({ queryKey: ['achievement-report'], queryFn: () => reportsService.getAchievement() });
+  const { data: report = [], isLoading, error, refetch } = useQuery({
+    queryKey: ['achievement-report'],
+    queryFn: () => reportsService.getAchievement(),
+  });
 
   const exportMut = useMutation({
     mutationFn: (format: 'csv' | 'excel') => reportsService.exportAchievement(format),
@@ -24,7 +27,7 @@ export default function AdminReportsPage() {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <PageHeader title="Achievement Reports" subtitle="Planned vs actual across all employees"
+      <PageHeader title="Achievement Reports" subtitle="Team performance summary by employee"
         actions={
           <div className="flex gap-2">
             <button onClick={() => exportMut.mutate('csv')} disabled={exportMut.isPending} className="btn-secondary btn gap-2"><Download size={15}/>CSV</button>
@@ -36,31 +39,44 @@ export default function AdminReportsPage() {
         <table className="data-table">
           <thead>
             <tr>
-              <th>Employee</th><th>Dept</th><th>Manager</th><th>Goal</th><th>UoM</th><th>Target</th>
-              <th>Q1 Score</th><th>Q2 Score</th><th>Q3 Score</th><th>Q4 Score</th><th>Status</th>
+              <th>Employee</th><th>Dept</th><th>Goals</th>
+              <th>Avg Quality</th><th>Avg Progress</th><th>Locked Goals</th>
             </tr>
           </thead>
           <tbody>
-            {report.map((row: any, i: number) => (
+            {(report as any[]).map((row: any, i: number) => (
               <tr key={i}>
-                <td className="font-medium text-slate-800 dark:text-white whitespace-nowrap">{row.employeeName}</td>
-                <td className="text-slate-500 whitespace-nowrap">{row.department}</td>
-                <td className="text-slate-500 whitespace-nowrap">{row.manager}</td>
-                <td className="max-w-[180px] truncate">{row.goalTitle}</td>
-                <td>{row.uom}</td>
-                <td className="font-semibold">{row.target}</td>
-                {(['q1Score','q2Score','q3Score','q4Score'] as const).map((k) => (
-                  <td key={k}>
-                    {row[k] != null ? (
-                      <span className={`font-semibold ${row[k] >= 80 ? 'text-success-400' : row[k] >= 60 ? 'text-warning-400' : 'text-danger-400'}`}>
-                        {row[k].toFixed(0)}%
-                      </span>
-                    ) : <span className="text-slate-400">—</span>}
-                  </td>
-                ))}
-                <td><span className="badge badge-draft">{row.status}</span></td>
+                <td>
+                  <div className="flex items-center gap-2">
+                    <div className="w-7 h-7 rounded-full bg-brand-600 flex items-center justify-center text-white text-xs font-bold">
+                      {(row.name || 'U').charAt(0)}
+                    </div>
+                    <span className="font-medium text-slate-800 dark:text-white">{row.name}</span>
+                  </div>
+                </td>
+                <td className="text-slate-500 text-xs">{row.department}</td>
+                <td className="font-semibold">{row.goals}</td>
+                <td>
+                  <span className={`font-semibold ${row.avgQualityScore >= 80 ? 'text-success-400' : row.avgQualityScore >= 60 ? 'text-warning-400' : 'text-danger-400'}`}>
+                    {row.avgQualityScore?.toFixed(1) ?? '—'}
+                  </span>
+                </td>
+                <td>
+                  <span className={`font-semibold ${row.avgProgressScore >= 80 ? 'text-success-400' : row.avgProgressScore >= 60 ? 'text-warning-400' : 'text-danger-400'}`}>
+                    {row.avgProgressScore?.toFixed(0) ?? '—'}%
+                  </span>
+                </td>
+                <td>
+                  <div className="flex items-center gap-1">
+                    <Lock size={12} className="text-brand-400"/>
+                    <span className="font-semibold">{row.lockedGoals}</span>
+                  </div>
+                </td>
               </tr>
             ))}
+            {report.length === 0 && (
+              <tr><td colSpan={6} className="text-center py-8 text-slate-400">No report data yet. Goals must be approved and have check-ins.</td></tr>
+            )}
           </tbody>
         </table>
       </div>

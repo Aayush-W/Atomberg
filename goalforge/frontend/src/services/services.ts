@@ -1,177 +1,116 @@
+// Add missing services to the API layer
 import { api } from './api';
 import type {
-  AuthResponse,
-  User,
-  Goal,
-  Cycle,
-  CheckIn,
-  Notification,
-  EscalationRule,
-  AchievementReportRow,
-  CompletionDashboardRow,
-  SmartRewriteResponse,
-  ConflictCheckResponse,
-  GoalQualityResponse,
-  AchievementPrediction,
-  AnomalyResult,
-  ThrustAreaSuggestion,
-  CycleWindowStatus,
+  Goal, CheckIn, Cycle, User, Notification,
+  SmartRewriteResponse, ConflictCheckResponse,
+  ThrustAreaSuggestion, AnomalyResult, PredictionResult,
+  EscalationRule, AuditLog,
 } from '@/types';
 
-// ─── AUTH ────────────────────────────────────────────────────────────────────
-
+// ─── Auth ─────────────────────────────────────────────────────────────────────
 export const authService = {
-  login: (email: string, password: string) =>
-    api.post<AuthResponse>('/auth/login', { email, password }).then((r) => r.data),
-  refresh: (refreshToken: string) =>
-    api.post<{ accessToken: string }>('/auth/refresh', { refreshToken }).then((r) => r.data),
+  login: (email: string, password: string) => api.post('/auth/login', { email, password }).then((r: any) => r.data),
+  refresh: (token: string) => api.post('/auth/refresh', { refreshToken: token }).then((r: any) => r.data),
   logout: () => api.post('/auth/logout'),
-  me: () => api.get<User>('/auth/me').then((r) => r.data),
+  me: () => api.get('/auth/me').then((r: any) => r.data as User),
 };
 
-// ─── USERS ───────────────────────────────────────────────────────────────────
-
+// ─── Users ────────────────────────────────────────────────────────────────────
 export const usersService = {
-  getAll: () => api.get<User[]>('/users').then((r) => r.data),
-  getById: (id: string) => api.get<User>(`/users/${id}`).then((r) => r.data),
-  getTeam: (managerId: string) => api.get<User[]>(`/users/team/${managerId}`).then((r) => r.data),
-  create: (data: Partial<User> & { password: string }) =>
-    api.post<User>('/users', data).then((r) => r.data),
-  update: (id: string, data: Partial<User>) =>
-    api.put<User>(`/users/${id}`, data).then((r) => r.data),
+  getAll: () => api.get('/users').then((r: any) => r.data as User[]),
+  getTeam: (managerId: string) => api.get(`/users/team/${managerId}`).then((r: any) => r.data as User[]),
+  getById: (id: string) => api.get(`/users/${id}`).then((r: any) => r.data as User),
+  create: (data: Partial<User> & { password?: string }) => api.post('/users', data).then((r: any) => r.data),
+  update: (id: string, data: Partial<User>) => api.put(`/users/${id}`, data).then((r: any) => r.data),
 };
 
-// ─── CYCLES ──────────────────────────────────────────────────────────────────
-
+// ─── Cycles ───────────────────────────────────────────────────────────────────
 export const cyclesService = {
-  getAll: () => api.get<Cycle[]>('/cycles').then((r) => r.data),
-  getActive: () => api.get<Cycle>('/cycles/active').then((r) => r.data),
-  getStatus: (id: string) =>
-    api.get<CycleWindowStatus>(`/cycles/${id}/status`).then((r) => r.data),
-  create: (data: Partial<Cycle>) => api.post<Cycle>('/cycles', data).then((r) => r.data),
-  update: (id: string, data: Partial<Cycle>) =>
-    api.put<Cycle>(`/cycles/${id}`, data).then((r) => r.data),
+  getAll: () => api.get('/cycles').then((r: any) => r.data as Cycle[]),
+  getActive: () => api.get('/cycles/active').then((r: any) => r.data as Cycle),
+  getStatus: (id: string) => api.get(`/cycles/${id}/status`).then((r: any) => r.data),
+  create: (data: Partial<Cycle>) => api.post('/cycles', data).then((r: any) => r.data),
+  update: (id: string, data: Partial<Cycle>) => api.put(`/cycles/${id}`, data).then((r: any) => r.data),
 };
 
-// ─── GOALS ───────────────────────────────────────────────────────────────────
-
+// ─── Goals ────────────────────────────────────────────────────────────────────
 export const goalsService = {
-  getMine: () => api.get<Goal[]>('/goals').then((r) => r.data),
-  getTeam: () => api.get<Goal[]>('/goals/team').then((r) => r.data),
-  getAll: () => api.get<Goal[]>('/goals/all').then((r) => r.data),
-  getById: (id: string) => api.get<Goal>(`/goals/${id}`).then((r) => r.data),
-  create: (data: Partial<Goal>) => api.post<Goal>('/goals', data).then((r) => r.data),
-  update: (id: string, data: Partial<Goal>) =>
-    api.put<Goal>(`/goals/${id}`, data).then((r) => r.data),
+  getMine: () => api.get('/goals/mine').then((r: any) => r.data as Goal[]),
+  getTeam: () => api.get('/goals/team').then((r: any) => r.data as Goal[]),
+  getAll: () => api.get('/goals/all').then((r: any) => r.data as Goal[]),
+  getById: (id: string) => api.get(`/goals/${id}`).then((r: any) => r.data as Goal),
+  create: (data: Partial<Goal>) => api.post('/goals', data).then((r: any) => r.data),
+  update: (id: string, data: Partial<Goal>) => api.put(`/goals/${id}`, data).then((r: any) => r.data),
   delete: (id: string) => api.delete(`/goals/${id}`),
-  submit: (id: string) => api.post<Goal>(`/goals/${id}/submit`).then((r) => r.data),
-  approve: (id: string, comment?: string) =>
-    api.post<Goal>(`/goals/${id}/approve`, { comment }).then((r) => r.data),
-  reject: (id: string, comment: string) =>
-    api.post<Goal>(`/goals/${id}/reject`, { comment }).then((r) => r.data),
-  unlock: (id: string) => api.post<Goal>(`/goals/${id}/unlock`).then((r) => r.data),
-  pushShared: (data: {
-    thrustArea: string; title: string; description: string;
-    uomType: string; target: number; userIds: string[];
-  }) => api.post('/goals/shared', data).then((r) => r.data),
-  getDependencyGraph: () =>
-    api.get('/goals/dependency-graph').then((r) => r.data),
-  addDependency: (id: string, requiredGoalId: string) =>
-    api.post(`/goals/${id}/dependency`, { requiredGoalId }),
-  getAudit: (id: string) => api.get(`/goals/${id}/audit`).then((r) => r.data),
+  submit: (id: string) => api.post(`/goals/${id}/submit`).then((r: any) => r.data),
+  approve: (id: string) => api.post(`/goals/${id}/approve`).then((r: any) => r.data),
+  reject: (id: string, comment: string) => api.post(`/goals/${id}/reject`, { comment }).then((r: any) => r.data),
+  lock: (id: string) => api.post(`/goals/${id}/lock`).then((r: any) => r.data),
+  unlock: (id: string) => api.post(`/goals/${id}/unlock`).then((r: any) => r.data),
+  pushShared: (data: any) => api.post('/goals/shared', data).then((r: any) => r.data),
+  getDependencyGraph: () => api.get('/goals/dependency-graph').then((r: any) => r.data),
 };
 
-// ─── CHECK-INS ───────────────────────────────────────────────────────────────
-
+// ─── Check-ins ────────────────────────────────────────────────────────────────
 export const checkinsService = {
-  getForGoal: (goalId: string) =>
-    api.get<CheckIn[]>(`/checkins/goal/${goalId}`).then((r) => r.data),
-  create: (data: Partial<CheckIn>) => api.post<CheckIn>('/checkins', data).then((r) => r.data),
-  update: (id: string, data: Partial<CheckIn>) =>
-    api.put<CheckIn>(`/checkins/${id}`, data).then((r) => r.data),
-  addManagerComment: (id: string, comment: string) =>
-    api.post(`/checkins/${id}/manager-comment`, { comment }).then((r) => r.data),
-  getTeam: () => api.get<CheckIn[]>('/checkins/team').then((r) => r.data),
-  getCompletionStatus: () =>
-    api.get('/checkins/completion-status').then((r) => r.data),
+  create: (data: Partial<CheckIn>) => api.post('/checkins', data).then((r: any) => r.data),
+  getMine: () => api.get('/checkins/mine').then((r: any) => r.data as CheckIn[]),
+  addManagerComment: (id: string, comment: string) => api.put(`/checkins/${id}/comment`, { comment }).then((r: any) => r.data),
 };
 
-// ─── REPORTS ─────────────────────────────────────────────────────────────────
-
+// ─── Reports ──────────────────────────────────────────────────────────────────
 export const reportsService = {
-  getAchievement: (params?: Record<string, string>) =>
-    api.get<AchievementReportRow[]>('/reports/achievement', { params }).then((r) => r.data),
+  getAchievement: () => api.get('/reports/achievement').then((r: any) => r.data),
+  getCompletionDashboard: () => api.get('/reports/completion-dashboard').then((r: any) => r.data),
   exportAchievement: (format: 'csv' | 'excel') =>
-    api.get(`/reports/achievement/export`, {
-      params: { format },
-      responseType: 'blob',
-    }).then((r) => r.data),
-  getCompletionDashboard: () =>
-    api.get<CompletionDashboardRow[]>('/reports/completion-dashboard').then((r) => r.data),
-  getManagerEffectiveness: () =>
-    api.get('/reports/manager-effectiveness').then((r) => r.data),
-  getQoQTrends: () => api.get('/reports/qoq-trends').then((r) => r.data),
-  getGoalDistribution: () => api.get('/reports/goal-distribution').then((r) => r.data),
+    api.get(`/reports/achievement/export`, { params: { format }, responseType: 'blob' }).then((r: any) => r.data as Blob),
 };
 
-// ─── AUDIT ───────────────────────────────────────────────────────────────────
-
-export const auditService = {
-  getAll: (params?: Record<string, string>) =>
-    api.get('/audit', { params }).then((r) => r.data),
-  getForGoal: (goalId: string) =>
-    api.get(`/audit/goal/${goalId}`).then((r) => r.data),
-};
-
-// ─── NOTIFICATIONS ────────────────────────────────────────────────────────────
-
+// ─── Notifications ────────────────────────────────────────────────────────────
 export const notificationsService = {
-  getAll: () => api.get<Notification[]>('/notifications').then((r) => r.data),
-  markRead: (id: string) =>
-    api.put(`/notifications/${id}/read`).then((r) => r.data),
-  markAllRead: () => api.put('/notifications/read-all').then((r) => r.data),
+  getAll: () => api.get('/notifications').then((r: any) => r.data as Notification[]),
+  markRead: (id: string) => api.put(`/notifications/${id}/read`),
+  markAllRead: () => api.put('/notifications/read-all'),
 };
 
-// ─── ESCALATIONS ─────────────────────────────────────────────────────────────
+// ─── Audit ────────────────────────────────────────────────────────────────────
+export const auditService = {
+  getAll: (params?: Record<string, string>) => api.get('/audit', { params }).then((r: any) => r.data as AuditLog[]),
+  getForGoal: (goalId: string) => api.get(`/audit/goal/${goalId}`).then((r: any) => r.data as AuditLog[]),
+};
 
+// ─── Escalations ──────────────────────────────────────────────────────────────
 export const escalationsService = {
-  getRules: () => api.get<EscalationRule[]>('/escalations/rules').then((r) => r.data),
-  createRule: (data: Partial<EscalationRule>) =>
-    api.post<EscalationRule>('/escalations/rules', data).then((r) => r.data),
-  updateRule: (id: string, data: Partial<EscalationRule>) =>
-    api.put<EscalationRule>(`/escalations/rules/${id}`, data).then((r) => r.data),
-  getLog: () => api.get('/escalations/log').then((r) => r.data),
-  triggerManual: () => api.post('/escalations/trigger-manual').then((r) => r.data),
+  getRules: () => api.get('/escalations/rules').then((r: any) => r.data as EscalationRule[]),
+  createRule: (data: Partial<EscalationRule>) => api.post('/escalations/rules', data).then((r: any) => r.data),
+  updateRule: (id: string, data: Partial<EscalationRule>) => api.put(`/escalations/rules/${id}`, data).then((r: any) => r.data),
+  getLog: () => api.get('/escalations/log').then((r: any) => r.data),
+  triggerManual: () => api.post('/escalations/trigger-manual').then((r: any) => r.data),
 };
 
-// ─── AI ──────────────────────────────────────────────────────────────────────
-
+// ─── AI ───────────────────────────────────────────────────────────────────────
 export const aiService = {
   smartRewrite: (thrustArea: string, title: string, description: string) =>
-    api.post<SmartRewriteResponse>('/ai/smart-rewrite', { thrustArea, title, description })
-      .then((r) => r.data),
-  conflictCheck: (goals: Goal[]) =>
-    api.post<ConflictCheckResponse>('/ai/conflict-check', { goals }).then((r) => r.data),
-  suggestWeightage: (goals: Goal[], thrustAreas: string[]) =>
-    api.post('/ai/suggest-weightage', { goals, thrustAreas }).then((r) => r.data),
-  conversationalCheckin: (goalId: string, quarter: string, messages: unknown[]) =>
-    api.post('/ai/conversational-checkin', { goalId, quarter, messages }).then((r) => r.data),
+    api.post('/ai/smart-rewrite', { thrustArea, title, description }).then((r: any) => r.data as SmartRewriteResponse),
+  conflictCheck: (goals: Partial<Goal>[]) =>
+    api.post('/ai/conflict-check', { goals }).then((r: any) => r.data as ConflictCheckResponse),
+  suggestWeightage: (goals: Partial<Goal>[], thrustAreas: string[]) =>
+    api.post('/ai/suggest-weightage', { goals, thrustAreas }).then((r: any) => r.data),
+  conversationalCheckin: (goalId: string, quarter: string, messages: any[]) =>
+    api.post('/ai/conversational-checkin', { goalId, quarter, messages }).then((r: any) => r.data),
   goalSummary: (employeeId: string) =>
-    api.post('/ai/goal-summary', { employeeId }).then((r) => r.data),
+    api.post('/ai/goal-summary', { employeeId }).then((r: any) => r.data as { summary: string }),
 };
 
-// ─── ML ──────────────────────────────────────────────────────────────────────
-
+// ─── ML ───────────────────────────────────────────────────────────────────────
 export const mlService = {
-  predictAchievement: (employeeId: string, cycleId: string) =>
-    api.post<AchievementPrediction[]>('/ml/predict-achievement', { employeeId, cycleId })
-      .then((r) => r.data),
+  predictAchievement: (userId: string, cycleId: string) =>
+    api.post('/ml/predict-achievement', { employeeId: userId, cycleId }).then((r: any) => r.data as PredictionResult[]),
   goalQuality: (title: string, description: string) =>
-    api.post<GoalQualityResponse>('/ml/goal-quality', { title, description }).then((r) => r.data),
-  getAnomalies: () => api.get<AnomalyResult[]>('/ml/anomalies').then((r) => r.data),
+    api.post('/ml/goal-quality', { title, description }).then((r: any) => r.data),
+  getAnomalies: () => api.get('/ml/anomalies').then((r: any) => r.data as AnomalyResult[]),
   suggestThrustArea: (title: string, description: string) =>
-    api.post<ThrustAreaSuggestion>('/ml/suggest-thrust-area', { title, description })
-      .then((r) => r.data),
+    api.post('/ml/suggest-thrust-area', { title, description }).then((r: any) => r.data as ThrustAreaSuggestion),
   getSentimentTrends: (managerId: string) =>
-    api.get(`/ml/sentiment-trends`, { params: { managerId } }).then((r) => r.data),
+    api.get('/ml/sentiment-trends', { params: { managerId } }).then((r: any) => r.data),
 };

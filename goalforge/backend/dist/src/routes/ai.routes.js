@@ -1,0 +1,13 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.aiRouter = void 0;
+const express_1 = require("express");
+const auth_middleware_1 = require("../middleware/auth.middleware");
+const ai_controller_1 = require("../controllers/ai.controller");
+exports.aiRouter = (0, express_1.Router)();
+exports.aiRouter.use(auth_middleware_1.requireAuth);
+exports.aiRouter.post('/smart-rewrite', ai_controller_1.smartRewrite);
+exports.aiRouter.post('/conflict-check', ai_controller_1.conflictCheck);
+exports.aiRouter.post('/suggest-weightage', ai_controller_1.suggestWeightage);
+exports.aiRouter.post('/conversational-checkin', ai_controller_1.conversationalCheckin);
+exports.aiRouter.post('/goal-summary', ai_controller_1.goalSummary);

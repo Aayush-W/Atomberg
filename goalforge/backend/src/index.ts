@@ -5,6 +5,7 @@ import dotenv from 'dotenv';
 import { prisma } from './lib/prisma';
 import { apiRouter } from './routes';
 import { errorHandler, notFoundHandler } from './middleware/error.middleware';
+import { startEscalationJob } from './jobs/escalation.job';
 
 dotenv.config();
 
@@ -29,6 +30,7 @@ app.use(errorHandler);
 
 const server = app.listen(port, () => {
   console.log(`GoalForge backend listening on port ${port}`);
+  startEscalationJob();
 });
 
 process.on('SIGINT', async () => {

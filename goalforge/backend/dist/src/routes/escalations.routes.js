@@ -1,0 +1,14 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.escalationsRouter = void 0;
+const express_1 = require("express");
+const auth_middleware_1 = require("../middleware/auth.middleware");
+const role_middleware_1 = require("../middleware/role.middleware");
+const escalations_controller_1 = require("../controllers/escalations.controller");
+exports.escalationsRouter = (0, express_1.Router)();
+exports.escalationsRouter.use(auth_middleware_1.requireAuth);
+exports.escalationsRouter.get('/rules', (0, role_middleware_1.requireRole)('ADMIN'), escalations_controller_1.getRules);
+exports.escalationsRouter.post('/rules', (0, role_middleware_1.requireRole)('ADMIN'), escalations_controller_1.createRule);
+exports.escalationsRouter.put('/rules/:id', (0, role_middleware_1.requireRole)('ADMIN'), escalations_controller_1.updateRule);
+exports.escalationsRouter.get('/log', (0, role_middleware_1.requireRole)('ADMIN'), escalations_controller_1.getLog);
+exports.escalationsRouter.post('/trigger-manual', (0, role_middleware_1.requireRole)('ADMIN'), escalations_controller_1.triggerManual);

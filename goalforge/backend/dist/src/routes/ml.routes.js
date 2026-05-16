@@ -1,0 +1,13 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.mlRouter = void 0;
+const express_1 = require("express");
+const auth_middleware_1 = require("../middleware/auth.middleware");
+const ml_controller_1 = require("../controllers/ml.controller");
+exports.mlRouter = (0, express_1.Router)();
+exports.mlRouter.use(auth_middleware_1.requireAuth);
+exports.mlRouter.post('/predict-achievement', ml_controller_1.predictAchievement);
+exports.mlRouter.post('/goal-quality', ml_controller_1.goalQuality);
+exports.mlRouter.get('/anomalies', ml_controller_1.getAnomalies);
+exports.mlRouter.post('/suggest-thrust-area', ml_controller_1.suggestThrustArea);
+exports.mlRouter.get('/sentiment-trends', ml_controller_1.sentimentTrends);

@@ -221,3 +221,6 @@ export interface CycleWindowStatus {
   nextWindowDate: string | null;
   daysRemaining: number | null;
 }
+
+// Aliases
+export type PredictionResult = AchievementPrediction;

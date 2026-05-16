@@ -1,167 +1,4 @@
-import { Prisma, Role } from '@prisma/client';
-import { Request, Response } from 'express';
-import { prisma } from '../lib/prisma';
-import { asyncHandler } from '../utils/asyncHandler';
-import { forbidden, unauthorized } from '../utils/errors';
-import { currentUser } from './_helpers';
 
-function mapGoalsToProgress(goals: Array<Prisma.GoalGetPayload<{ include: { checkIns: true } }>>) {
-  return goals.map((goal) => {
-    const latest = goal.checkIns.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime()).at(-1);
-    return {
-      id: goal.id,
-      title: goal.title,
-      userId: goal.userId,
-      userName: goal.user?.name ?? null,
-      department: goal.user?.department ?? null,
-      status: goal.status,
-      weightage: goal.weightage,
-      qualityScore: goal.qualityScore,
-      latestProgress: latest?.progressScore ?? 0,
-      latestStatus: latest?.status ?? null
-    };
-  });
-}
-
-export const getAchievementReport = asyncHandler(async (_req: Request, res: Response) => {
-  const goals = await prisma.goal.findMany({
-    include: { user: true, checkIns: true }
-  });
-
-  const byUser = new Map<string, { userId: string; userName: string; department: string; goalCount: number; avgQuality: number; avgProgress: number; lockedRate: number }>();
-
-  goals.forEach((goal) => {
-    const latest = goal.checkIns.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime()).at(-1);
-    const userKey = goal.userId;
-    const current = byUser.get(userKey) ?? {
-      userId: goal.userId,
-      userName: goal.user.name,
-      department: goal.user.department,
-      goalCount: 0,
-      avgQuality: 0,
-      avgProgress: 0,
-      lockedRate: 0
-    };
-
-    current.goalCount += 1;
-    current.avgQuality += goal.qualityScore ?? 0;
-    current.avgProgress += latest?.progressScore ?? 0;
-    current.lockedRate += goal.status === 'LOCKED' ? 1 : 0;
-    byUser.set(userKey, current);
-  });
-
-  const report = Array.from(byUser.values()).map((entry) => ({
-    userId: entry.userId,
-    userName: entry.userName,
-    department: entry.department,
-    goalCount: entry.goalCount,
-    averageQualityScore: entry.goalCount ? Number((entry.avgQuality / entry.goalCount).toFixed(1)) : 0,
-    averageProgressScore: entry.goalCount ? Number((entry.avgProgress / entry.goalCount).toFixed(1)) : 0,
-    lockedGoalRate: entry.goalCount ? Number(((entry.lockedRate / entry.goalCount) * 100).toFixed(1)) : 0
-  }));
-
-  res.json({ report });
-});
-
-export const getCompletionReport = asyncHandler(async (_req: Request, res: Response) => {
-  const goals = await prisma.goal.findMany({
-    include: { user: true, checkIns: true }
-  });
-
-  const goalRows = mapGoalsToProgress(goals).map((row) => ({
-    ...row,
-    completed: row.latestStatus === 'COMPLETED' || row.status === 'LOCKED' || row.status === 'APPROVED'
-  }));
-
-  const byDepartment = new Map<string, { department: string; totalGoals: number; completedGoals: number }>();
-  goalRows.forEach((row) => {
-    const department = row.department ?? 'Unknown';
-    const current = byDepartment.get(department) ?? { department, totalGoals: 0, completedGoals: 0 };
-    current.totalGoals += 1;
-    if (row.completed) current.completedGoals += 1;
-    byDepartment.set(department, current);
-  });
-
-  const summary = Array.from(byDepartment.values()).map((entry) => ({
-    department: entry.department,
-    totalGoals: entry.totalGoals,
-    completedGoals: entry.completedGoals,
-    completionRate: entry.totalGoals ? Number(((entry.completedGoals / entry.totalGoals) * 100).toFixed(1)) : 0
-  }));
-
-  res.json({ summary, goals: goalRows });
-});
-
-export const getManagerEffectivenessReport = asyncHandler(async (req: Request, res: Response) => {
-  const user = currentUser(req);
-  if (user.role !== Role.ADMIN && user.role !== Role.MANAGER) {
-    throw forbidden('Only managers and admins can access manager effectiveness reports');
-  }
-
-  const managers = await prisma.user.findMany({
-    where: user.role === Role.MANAGER ? { id: user.id } : { role: Role.MANAGER },
-    include: { reportees: true }
-  });
-
-  const report = await Promise.all(
-    managers.map(async (manager) => {
-      const reporteeIds = manager.reportees.map((employee) => employee.id);
-      const goals = await prisma.goal.findMany({
-        where: { userId: { in: reporteeIds } },
-        include: { checkIns: true }
-      });
-
-      const submitted = goals.filter((goal) => goal.status === 'SUBMITTED').length;
-      const approvedOrLocked = goals.filter((goal) => goal.status === 'APPROVED' || goal.status === 'LOCKED').length;
-      const avgProgress = goals.length
-        ? goals.reduce((sum, goal) => {
-            const latest = goal.checkIns.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime()).at(-1);
-            return sum + (latest?.progressScore ?? 0);
-          }, 0) / goals.length
-        : 0;
-
-      return {
-        managerId: manager.id,
-        managerName: manager.name,
-        teamSize: reporteeIds.length,
-        goalApprovalRate: submitted ? Number(((approvedOrLocked / submitted) * 100).toFixed(1)) : 0,
-        averageTeamProgress: Number(avgProgress.toFixed(1)),
-        totalGoals: goals.length
-      };
-    })
-  );
-
-  res.json({ report });
-});
-
-export const getQoQTrendsReport = asyncHandler(async (_req: Request, res: Response) => {
-  const activeCycle = await prisma.cycle.findFirst({ where: { isActive: true }, orderBy: { startDate: 'desc' } });
-  if (!activeCycle) {
-    throw new Error('No active cycle');
-  }
-
-  const checkIns = await prisma.checkIn.findMany({
-    where: { goal: { cycleId: activeCycle.id } },
-    include: { goal: { select: { id: true } } }
-  });
-
-  const quarterStats = ['Q1', 'Q2', 'Q3', 'Q4'].map((quarter) => {
-    const quarterCheckIns = checkIns.filter((checkIn) => checkIn.quarter === quarter);
-    const completedCount = quarterCheckIns.filter((item) => item.status === 'COMPLETED').length;
-    const averageProgress = quarterCheckIns.length
-      ? quarterCheckIns.reduce((sum, item) => sum + item.progressScore, 0) / quarterCheckIns.length
-      : 0;
-
-    return {
-      quarter,
-      averageProgress: Number(averageProgress.toFixed(1)),
-      completionRate: quarterCheckIns.length ? Number(((completedCount / quarterCheckIns.length) * 100).toFixed(1)) : 0,
-      checkInCount: quarterCheckIns.length
-    };
-  });
-
-  res.json({ cycleId: activeCycle.id, cycleName: activeCycle.name, quarterTrends: quarterStats });
-});
 import { Prisma, Role } from '@prisma/client';
 import { Request, Response } from 'express';
 import { prisma } from '../lib/prisma';
@@ -265,7 +102,7 @@ export const getCompletionReport = asyncHandler(async (req: Request, res: Respon
     locked: goal.status === 'LOCKED',
     latestProgress: latestProgress(goal.checkIns),
     checkIns: goal.checkIns.length,
-    completionStatus: goal.status === 'COMPLETED' || goal.status === 'LOCKED' ? 'COMPLETED' : 'IN_PROGRESS'
+    completionStatus: goal.status === 'LOCKED' || goal.status === 'APPROVED' ? 'COMPLETED' : 'IN_PROGRESS'
   }));
 
   const departmentStats = Array.from(
@@ -276,8 +113,8 @@ export const getCompletionReport = asyncHandler(async (req: Request, res: Respon
       current.totalProgress += row.latestProgress;
       acc.set(row.department, current);
       return acc;
-    }, new Map<string, any>())
-  ).map((entry) => ({
+    }, new Map<string, any>()).values()
+  ).map((entry: any) => ({
     department: entry.department,
     goals: entry.goals,
     completed: entry.completed,

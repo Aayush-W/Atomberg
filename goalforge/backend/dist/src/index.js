@@ -10,6 +10,7 @@ const dotenv_1 = __importDefault(require("dotenv"));
 const prisma_1 = require("./lib/prisma");
 const routes_1 = require("./routes");
 const error_middleware_1 = require("./middleware/error.middleware");
+const escalation_job_1 = require("./jobs/escalation.job");
 dotenv_1.default.config();
 const app = (0, express_1.default)();
 const port = process.env.PORT ? Number(process.env.PORT) : 4000;
@@ -27,6 +28,7 @@ app.use(error_middleware_1.notFoundHandler);
 app.use(error_middleware_1.errorHandler);
 const server = app.listen(port, () => {
     console.log(`GoalForge backend listening on port ${port}`);
+    (0, escalation_job_1.startEscalationJob)();
 });
 process.on('SIGINT', async () => {
     await prisma_1.prisma.$disconnect();

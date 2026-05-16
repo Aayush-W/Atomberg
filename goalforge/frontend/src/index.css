@@ -39,12 +39,12 @@
 @layer components {
   /* Glass card */
   .glass {
-    @apply bg-white/70 dark:bg-surface-900/70 backdrop-blur-md border border-white/20 dark:border-surface-700/50;
+    @apply bg-surface-100/60 dark:bg-surface-900/60 backdrop-blur-xl border border-white/40 dark:border-surface-700/30 shadow-[0_8px_32px_-4px_rgba(0,0,0,0.05)] dark:shadow-[0_8px_32px_-4px_rgba(0,0,0,0.3)];
   }
 
   /* Premium card */
   .card {
-    @apply bg-white dark:bg-surface-900 rounded-2xl border border-surface-200 dark:border-surface-800 shadow-sm;
+    @apply bg-surface-50/80 dark:bg-surface-900/40 backdrop-blur-lg rounded-[1.25rem] border border-white/50 dark:border-surface-800/50 shadow-[0_8px_30px_-4px_rgba(0,0,0,0.04)] dark:shadow-[0_8px_30px_-4px_rgba(0,0,0,0.2)];
   }
 
   /* Sidebar */
@@ -69,10 +69,10 @@
 
   /* Form elements */
   .input {
-    @apply w-full px-3.5 py-2.5 rounded-xl bg-surface-50 dark:bg-surface-800 border border-surface-200 dark:border-surface-700
+    @apply w-full px-4 py-3 rounded-2xl bg-surface-100/50 dark:bg-surface-800/50 border border-surface-200/50 dark:border-surface-700/50
            text-sm text-slate-800 dark:text-slate-100 placeholder-slate-400
-           focus:outline-none focus:ring-2 focus:ring-brand-500/50 focus:border-brand-500
-           transition-all duration-150;
+           focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500
+           transition-all duration-150 shadow-inner;
   }
 
   .label {
@@ -81,26 +81,26 @@
 
   /* Buttons */
   .btn {
-    @apply inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold
+    @apply inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-full text-sm font-semibold
            transition-all duration-150 disabled:opacity-50 disabled:pointer-events-none;
   }
   .btn-primary {
-    @apply btn bg-brand-600 hover:bg-brand-700 text-white shadow-sm shadow-brand-500/20;
+    @apply btn bg-brand-700 hover:bg-brand-800 text-white shadow-lg shadow-brand-900/20;
   }
   .btn-secondary {
-    @apply btn bg-surface-100 hover:bg-surface-200 dark:bg-surface-800 dark:hover:bg-surface-700 text-slate-700 dark:text-slate-200;
+    @apply btn bg-surface-100 hover:bg-surface-200 dark:bg-surface-800 dark:hover:bg-surface-700 text-slate-800 dark:text-slate-100 border border-surface-200 dark:border-surface-700 shadow-sm;
   }
   .btn-danger {
-    @apply btn bg-danger-500 hover:bg-danger-600 text-white;
+    @apply btn bg-danger-500 hover:bg-danger-600 text-white shadow-md shadow-danger-500/20;
   }
   .btn-ghost {
-    @apply btn bg-transparent hover:bg-surface-100 dark:hover:bg-surface-800 text-slate-600 dark:text-slate-300;
+    @apply btn bg-transparent hover:bg-surface-100/50 dark:hover:bg-surface-800/50 text-slate-700 dark:text-slate-300;
   }
   .btn-sm {
-    @apply px-3 py-1.5 text-xs rounded-lg;
+    @apply px-3.5 py-1.5 text-xs rounded-full;
   }
   .btn-lg {
-    @apply px-6 py-3 text-base rounded-2xl;
+    @apply px-7 py-3.5 text-base rounded-full;
   }
 
   /* Table */

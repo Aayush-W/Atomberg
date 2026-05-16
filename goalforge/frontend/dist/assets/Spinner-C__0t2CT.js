@@ -1,0 +1,1 @@
+import{p as a}from"./index-BjExAu0K.js";import{L as e}from"./PageHeader-YNa-hePA.js";function i({size:r=20,className:t=""}){return a.jsx(e,{size:r,className:`animate-spin text-brand-500 ${t}`})}export{i as S};

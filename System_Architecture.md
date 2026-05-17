@@ -1,82 +1,154 @@
-# GoalForge - System Architecture Document
+# GoalForge — Enterprise System Architecture Document
 
-## 1. Executive Summary & The Noble Idea
-**The Noble Idea**: GoalForge aims to democratize organizational growth by transitioning goal-tracking from a reactive HR mandate to a proactive, intelligent ecosystem. By automatically syncing cascading goals and evaluating manager sentiment via ML, it prevents employee burnout and perfectly aligns individual tasks with corporate strategy.
+## 1. Executive Summary & The Novelty Idea
 
-GoalForge is built using a modern microservice-oriented architecture, Containerized via Docker, and structured into three primary tiers: Presentation (Frontend), Application (Backend API + ML Service), and Data (PostgreSQL).
-
----
-
-## 2. High-Level Architecture
-
-The architecture is divided into the following core tiers:
-
-### 2.1 Presentation Tier (Frontend)
-- **Framework:** React.js powered by Vite for rapid build and hot-module replacement.
-- **State Management:** Zustand (for lightweight, scalable global state, e.g., Authentication state).
-- **Styling:** TailwindCSS for utility-first, responsive, and highly customizable UI design.
-- **API Communication:** Axios with interceptors for automatic JWT token attachment and refresh flows.
-
-### 2.2 Application Tier (Backend)
-- **Runtime:** Node.js with Express framework, written strictly in TypeScript.
-- **Authentication:** JWT (JSON Web Tokens) with short-lived access tokens and long-lived refresh tokens.
-- **Business Logic Rules Engine:** Extracts complex timeline constraints (e.g., the 21-day quarterly check-in window) and goal weightage limits (up to 100%) into reusable services.
-- **Background Jobs:** Uses `node-cron` to periodically scan for missing check-ins or pending approvals and trigger escalation events.
-
-### 2.3 Machine Learning Tier (AI Service)
-- **Framework:** Python FastAPI running on Uvicorn.
-- **Functionality:** Exposes lightweight HTTP endpoints to the Node.js backend to perform Sentiment Analysis on manager comments and predict goal quality metrics.
-
-### 2.4 Data Tier (Database)
-- **Database Engine:** PostgreSQL 15.
-- **ORM:** Prisma Client. Provides a fully type-safe query builder that automatically syncs the database schema with TypeScript types.
+### The Novelty: Proactive Growth & Cognitive Alignment
+GoalForge moves goal-tracking from a reactive, annual HR compliance exercise into a **proactive, cognitive alignment ecosystem**. Traditional platforms act as passive digital ledgers. GoalForge acts as an active organizational health engine, introducing:
+1. **Negotiated Alignment:** Managers can inline-edit, refine, and calibrate weightages/targets directly during the approval stage, shifting the process from top-down mandates to a constructive negotiation.
+2. **Cognitive Guardrails (Burnout Protection):** Check-in updates are parsed in real-time by a sentiment analysis engine. An unexpected dip in manager/employee narrative alignment flags early-stage burnout or systemic friction before key results fail.
+3. **Cross-Department Conflict Alerting:** High-level analytics scan departmental OKRs to identify structural contradictions (e.g., standardizing prototyping velocity while simultaneously enforcing aggressive cloud infrastructure cost cuts).
 
 ---
 
-## 3. Core Component Workflows
+## 2. Cloud-Native Production Architecture ($0-Cost Stack)
 
-### 3.1 Strict Check-in Windows & UoM Formulas
-The system enforces rigorous business constraints at the controller level:
-- **Timeline Validation:** When a `CheckIn` is created or updated, the system evaluates the current date against the active `Cycle` (e.g., Q1, Q2) to ensure the 21-day window is open. If closed, the API rejects the request unless a global `bypassWindow` flag is active.
-- **Progress Computation (UoM):** Progress is dynamically computed on the backend based on the Unit of Measurement (MIN, MAX, TIMELINE, ZERO) rather than trusting client-side calculations.
+GoalForge has transitioned from a local Docker Compose setup to a highly optimized, fully distributed, zero-cost production cloud architecture.
 
-### 3.2 Shared Goals Synchronization
-To support hierarchical organization structures, goals can be cascaded:
-- When a Manager updates the progress of a parent goal, the Backend Prisma transaction automatically queries all linked child goals (`parentGoalId`) and cascades the exact same `actualValue`, `progressScore`, and `completionDate` downwards.
-- Role-Based Access Control (RBAC) prevents employees from directly modifying check-ins of inherited shared goals.
+```mermaid
+graph TD
+    %% Presentation Tier
+    UserBrowser["User Browser (HTTPS)"]
+    Vercel["Vercel CDN (Edge Servers)<br/>React + Vite Frontend"]
+    
+    %% Compute Tier
+    HF_Backend["Hugging Face Space (Docker)<br/>Express API Gateway Gateway"]
+    HF_ML["Hugging Face Space (Docker)<br/>FastAPI Analytics & Sentiment"]
+    
+    %% Data Tier
+    Neon_DB[("Neon Serverless Database<br/>PostgreSQL 15")]
+    
+    %% Routing Paths
+    UserBrowser -->|HTTPS| Vercel
+    UserBrowser -->|API Requests / JWT| HF_Backend
+    HF_Backend -->|Internal REST Calls| HF_ML
+    HF_Backend -->|Prisma Client (SSL)| Neon_DB
+    HF_ML -->|Dynamic Queries| Neon_DB
 
-### 3.3 Security & Role-Based Access Control (RBAC)
-- **Employee (L3):** Can draft goals, submit check-ins (for owned goals), and view their own dashboards.
-- **Manager (L1/L2):** Can approve goals, add manager comments, create shared goals, and view team analytics.
-- **HR/Admin:** Can configure Organizational Cycles, define Escalation Rules, and bypass timeline constraints.
+    classDef presentation fill:#f43f5e,stroke:#333,stroke-width:2px,color:#fff;
+    classDef compute fill:#3b82f6,stroke:#333,stroke-width:2px,color:#fff;
+    classDef data fill:#10b981,stroke:#333,stroke-width:2px,color:#fff;
+    
+    class Vercel presentation;
+    class HF_Backend,HF_ML compute;
+    class Neon_DB data;
+```
+
+### 2.1 Presentation Tier (Vercel Edge)
+* **Framework:** React 18, Vite-compiled single page application (SPA).
+* **State Management:** Zustand, providing an immutable, fast-rendering global authentication and navigation state.
+* **Styling System:** Modern custom CSS framework built on design tokens (vibrant dark-modes, modern layout grids).
+* **Connection Security:** Employs Axios Interceptors to inject JWT Access tokens in HTTP headers, automatically handling silent token refreshes via HTTP-only secure cookies (`goalforge_refresh_token`).
+
+### 2.2 Core Application Tier (Hugging Face Backend)
+* **Engine:** Express.js API gateway, fully written in strict TypeScript.
+* **Containerization:** Deployed via a customized alpine-linux Docker container optimized for fast boot-ups, binding port `7860` under Hugging Face's reverse proxy.
+* **Authentication Service:** State-of-the-art token security using a double-JWT implementation (15-minute `JWT_SECRET` Access token + 7-day `JWT_REFRESH_SECRET` Refresh token).
+* **Rules Engine:** Dynamic controllers enforcing data invariants:
+  * Strict timeline validation checking active quarters (Q1–Q4) against cycle limits.
+  * Zod-validated input schemas securing database updates from bad weightages (>100%).
+
+### 2.3 Machine Learning Tier (Hugging Face ML Space)
+* **Engine:** Python 3.10, FastAPI, running with the Uvicorn web server.
+* **NLP Analysis:** Hugging Face model pipelines executing sentiment analysis and token categorization on check-in commentary.
+* **Integration:** Connects strictly back to the Node.js API over secure internal HTTP calls to feed data into the front-end dashboard metrics.
+
+### 2.4 Serverless Data Tier (Neon PostgreSQL)
+* **Engine:** PostgreSQL 15 running on Neon Serverless.
+* **Scale-to-Zero:** Autoscaling serverless compute instantly scales down to 0 active cores during periods of organizational inactivity to maintain zero-cost deployment, ramping back up in under 500ms on request.
+* **ORM:** Prisma Client with connection pooling (`sslmode=require`), providing compiled type-safe TypeScript interfaces matching database transactions.
+
+---
+
+## 3. Novel Core Features & Technical Workflows
+
+### 3.1 Inline Negotiation & Validation (NEW)
+* **Workflow:** During goal validation, the Manager can intercept a pending draft and perform inline modifications on `target` values and `weightage` fields directly on the **Approvals Page**. 
+* **Database Guardrails:** When the Manager submits the approval request, Zod schemas ensure cumulative employee goal weightage does not violate the strict 100% threshold.
+
+### 3.2 Hierarchical Shared Goals Synchronization (FIXED)
+* **Cascading Transactions:** When a parent shared goal's progress is updated, a deep SQL transaction is initiated via Prisma.
+* **Synchronization Hook:**
+  ```mermaid
+  sequenceDiagram
+      participant Manager
+      participant Parent Goal
+      participant Child Goals
+      participant DB
+      
+      Manager->>Parent Goal: Update Progress (Check-in)
+      Parent Goal->>DB: Write Parent Check-In (actualValue, progressScore)
+      Note over Parent Goal, Child Goals: Sync Hook Triggers
+      DB-->>Child Goals: Query where parentGoalId = parent.id & isShared = true
+      Child Goals->>DB: Cascade exact same actualValue, progress, & completionDate
+      DB-->>Manager: Confirm nested synchronization across full hierarchy
+  ```
+* **RBAC Restrictions:** Inherited child goals are marked as read-only (`isShared = true`) for target employees. Only the parent owner (Manager) can write directly to the check-in nodes.
+
+### 3.3 Sentiment & Burnout Intelligence
+* **Comment Parsing:** When a check-in is logged, the FastAPI model evaluates the manager's comment.
+* **Friction Flagging:** Negative sentiment scores (<0.1) trigger an alignment warning in the HR/Executive dashboard, indicating potential breakdown in objective feasibility.
+
+### 3.4 Unit of Measurement (UoM) Unified Progress Engine
+GoalForge features a completely unified, reconciled Progress Calculation Engine across client and server:
+* **MIN (Increase-to-Target):** 
+  $$\text{Progress} = \frac{\text{Actual}}{\text{Target}} \times 100$$
+* **MAX (Decrease-to-Target):** Used for reducing metrics (errors, costs).
+  $$\text{Progress} = \frac{\text{Target} - \text{Actual}}{\text{Target}} \times 100$$
+* **TIMELINE:** Linear evaluation comparing the completion date against the goal's target date.
+* **ZERO (Maintenance Objective):** Binary evaluation (0 = 100%, >0 = 0% or vice versa).
 
 ---
 
 ## 4. Entity Relationship (Database Schema)
 
-The Prisma PostgreSQL database consists of the following core entities:
-- **User:** Stores employee credentials, roles, and departmental reporting hierarchy (`managerId`).
-- **Cycle:** Defines the organizational financial year and strict quarterly window start/end dates.
-- **Goal:** Stores the objective, target, UoM Type, weightage, and relates to a `Cycle` and `User`. Supports self-referential relations (`parentGoalId`) for shared goals.
-- **CheckIn:** Tracks quarterly progress against a goal.
-- **AuditLog:** Provides a tamper-proof history of critical actions (e.g., `CHECKIN_DELETED`, `GOAL_APPROVED`).
-- **EscalationRule & Event:** Configures SLA triggers for missing check-ins or approvals.
+```mermaid
+erDiagram
+    TENANT ||--o{ USER : "groups"
+    TENANT ||--o{ CYCLE : "operates"
+    TENANT ||--o{ GOAL : "manages"
+    USER ||--o{ GOAL : "owns"
+    USER ||--o{ AUDIT_LOG : "triggers"
+    CYCLE ||--o{ GOAL : "contains"
+    GOAL ||--o{ CHECK_IN : "tracks"
+    GOAL ||--o{ GOAL_DEPENDENCY : "depends"
+    GOAL_CONFLICT_ALERT ||--|| GOAL : "references"
+    ESCALATION_RULE ||--o{ ESCALATION_EVENT : "defines"
+```
+
+* **Tenant:** Supports multi-tenant organizational structure with custom branding palettes.
+* **User:** Tracks roles (`Role.ADMIN`, `Role.MANAGER`, `Role.EMPLOYEE`) and departmental reporting tree (`managerId` self-relation).
+* **Goal:** Core objective container holding target values, weightages, cascading links (`parentGoalId`), and AI tags.
+* **CheckIn:** Individual quarterly milestones tracking numeric values and sentiment telemetry.
 
 ---
 
-## 5. External Integrations (Bonus Architecture)
+## 5. Enterprise Integrations & Reporting (BONUS Features)
 
-The system is designed to easily plug into enterprise ecosystems:
-1. **Microsoft Entra ID (Azure AD):** The `User` schema includes `microsoftEntraId` and `microsoftTenantId` fields to support seamless OIDC Single Sign-On.
-2. **Microsoft Teams Webhooks:** The Escalation Engine is architected to push JSON payloads to MS Teams webhook URLs when SLA thresholds are breached.
+### 5.1 OIDC Authentication via Microsoft Entra ID
+* User schemas support unified login. When OIDC triggers, the backend hooks into Active Directory profiles using `microsoftEntraId` and maps corporate directory permissions dynamically to local database roles.
+
+### 5.2 Outbound Webhook Integrations
+* High-volume events (`goal.created`, `checkin.updated`, `risk.detected`) emit encrypted JSON payloads directly to external corporate ERP or workspace endpoints (e.g. Slack/Teams Connectors).
+
+### 5.3 Achievement Report Export Service (NEW)
+* Exposes `/api/reports/achievement/export` using automated backend formatting engines to output live CSV/Excel tabular streams for executive auditing.
 
 ---
 
-## 6. Deployment Strategy
-The entire stack is orchestrated using **Docker Compose**. 
-- `goalforge-postgres`
-- `goalforge-backend` (Depends on Postgres)
-- `goalforge-ml-service`
-- `goalforge-frontend` (Depends on Backend)
+## 6. Zero-Cost Scaling & Security Blueprint
 
-All services run in isolated containers, ensuring environment parity between local development, testing, and production deployments.
+| Vector | Production Status | Next-Stage Scaling |
+|---|---|---|
+| **API Gateway** | 🟢 Locked behind Hugging Face SSL proxy; CORS strictly bounded to Vercel production URL. | Add Redis key-value caching layer to prevent API-throttling on heavy dashboard loads. |
+| **Compute Scaling**| 🟢 Scale-to-Zero serverless database logic + containerized sleep timeouts for maximum cost protection. | Set up a persistent cron trigger to prevent container sleep during working hours. |
+| **Database Security**| 🟢 SSL connections enforced; Prisma-layer parameters protect against SQL injection. | Schedule automated snapshots using Neon's branching technology. |

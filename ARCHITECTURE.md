@@ -1,6 +1,12 @@
-# Architecture After Deployment
+# GoalForge — Production Deployment Architecture
 
-## System Architecture Diagram
+This document tracks the live production deployment architecture for the **GoalForge** enterprise platform, reflecting its fully distributed, zero-cost production cloud architecture.
+
+---
+
+## 1. High-Level System Architecture Diagram
+
+The GoalForge platform consists of four fully containerized and edge-distributed segments:
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -11,16 +17,15 @@
                                  │
                                  ▼
     ┌──────────────────────────────────────────────────┐
-    │         VERCEL (Frontend Hosting)                 │
+    │         VERCEL (Frontend Edge Hosting)            │
     │                                                  │
     │  ┌────────────────────────────────────────┐     │
     │  │  GoalForge React + Vite App            │     │
     │  │  - Dashboard, Goals, Analytics, etc.  │     │
     │  │                                        │     │
-    │  │  Environment Variables:                │     │
+    │  │  Environment Secrets:                  │     │
     │  │  - VITE_API_URL                        │     │
     │  │  - VITE_ML_API_URL                     │     │
-    │  │  - VITE_APP_NAME                       │     │
     │  └────────────────────────────────────────┘     │
     └────┬──────────────────────────┬─────────────────┘
          │                          │
@@ -31,7 +36,7 @@
     │ HUGGINGFACE     │      │ HUGGINGFACE SPACES    │
     │ (Backend API)   │      │ (ML Service)          │
     │                 │      │                       │
-    │ Express/Node    │      │ FastAPI              │
+    │ Express/Node    │      │ FastAPI               │
     │ - Users         │      │ - Predictions         │
     │ - Goals         │      │ - Model Serving       │
     │ - Analytics     │      │ - Anomaly Detection   │
@@ -41,208 +46,84 @@
              │ POSTGRESQL PROTOCOL       │
              │ (Connection Pool)         │ May call for
              │                           │ advanced features
+             │                           │
              ▼                           │
-        ┌─────────────────┐              │
-        │ NEON            │◄─────────────┘
-        │ (PostgreSQL     │
-        │  Database)      │
-        │                 │
-        │ - User data     │
-        │ - Goals         │
-        │ - Performance   │
-        │   metrics       │
-        │ - Audit logs    │
-        └─────────────────┘
+         ┌─────────────────┐             │
+         │ NEON            │◄────────────┘
+         │ (PostgreSQL     │
+         │  Database)      │
+         │                 │
+         │ - User data     │
+         │ - Goals         │
+         │ - Performance   │
+         │   metrics       │
+         │ - Audit logs    │
+         └─────────────────┘
 ```
 
 ---
 
-## Deployment Locations
+## 2. Cloud Infrastructure Deployments
 
-### Frontend
-- **Platform**: Vercel
-- **URL**: `https://goalforge-RANDOM.vercel.app`
-- **Region**: CDN globally distributed
-- **Auto-scaling**: Yes
-- **SSL**: Yes (built-in)
+### 2.1 Frontend
+* **Platform:** Vercel (Edge Network)
+* **Live URL:** `https://goalforge-atomberg.vercel.app`
+* **Auto-Scaling:** Automatic and infinitely scalable via Vercel's global Serverless Edge CDN.
+* **Environment Variables:**
+  * `VITE_API_URL`: `https://aayush-w-goalforge-backend.hf.space/api`
+  * `VITE_ML_API_URL`: `https://aayush-w-goalforge-ml.hf.space/api`
 
-### Backend API
-- **Platform**: HuggingFace
-- **URL**: `https://your-username-backend.hf.space/api`
-- **Region**: HuggingFace infrastructure
-- **Auto-scaling**: Limited (Spaces have sleep timeout)
-- **SSL**: Yes (built-in)
+### 2.2 Core API Backend
+* **Platform:** Hugging Face Spaces (Docker Space)
+* **Live API URL:** `https://aayush-w-goalforge-backend.hf.space`
+* **Containerization:** Deployed via custom Alpine Linux Dockerfile listening on port `7860`.
+* **Database Driver:** Prisma Client with Pooled connections (`sslmode=require`).
+* **Critical Secrets:**
+  * `PORT`: `7860`
+  * `DATABASE_URL`: *[Neon Connection String]*
+  * `JWT_SECRET`: *[Access Token signing secret]*
+  * `JWT_REFRESH_SECRET`: *[Refresh Token signing secret]*
+  * `ML_SERVICE_URL`: `https://aayush-w-goalforge-ml.hf.space`
+  * `CORS_ORIGIN`: `https://goalforge-atomberg.vercel.app`
 
-### ML Service
-- **Platform**: HuggingFace Spaces (Docker)
-- **URL**: `https://your-username-goalforge-ml.hf.space`
-- **Region**: HuggingFace infrastructure
-- **Port**: 7860 (standard for Spaces)
-- **Auto-scaling**: Limited (Spaces have sleep timeout)
-- **SSL**: Yes (built-in)
+### 2.3 Machine Learning Service
+* **Platform:** Hugging Face Spaces (Docker Space)
+* **Live ML URL:** `https://aayush-w-goalforge-ml.hf.space`
+* **Port:** `7860` (Hugging Face default entrypoint).
+* **Stack:** FastAPI, Python 3.10, PyTorch, Hugging Face Transformers.
 
-### Database
-- **Platform**: Neon (PostgreSQL)
-- **Connection**: Pooled connection from both backend and ML service
-- **Backups**: Neon handles automatically
-- **SSL**: Yes (required)
-
----
-
-## Data Flow
-
-### User Login Flow
-```
-1. User enters credentials in Frontend (Vercel)
-2. Frontend sends POST to Backend (/api/auth/login)
-3. Backend validates against Neon database
-4. Backend returns JWT token
-5. Frontend stores token in local storage
-6. Frontend makes subsequent requests with Bearer token
-```
-
-### Goal Prediction Flow
-```
-1. User views goal prediction in Frontend
-2. Frontend fetches goal data from Backend
-3. Frontend OR Backend calls ML Service prediction endpoint
-4. ML Service processes request (may query database)
-5. ML Service returns prediction result
-6. Frontend displays result to user
-```
-
-### ML Model Training (if needed)
-```
-1. Scheduled job in ML Service
-2. Fetches data from Neon database
-3. Retrains models
-4. Saves updated models to persistent storage
-5. Loads models for next prediction
-```
+### 2.4 Serverless Database
+* **Platform:** Neon (PostgreSQL 15)
+* **Compute Management:** Serverless autoscaling (scales directly down to 0 compute units during periods of organizational inactivity to prevent cost accumulation).
+* **Backup Strategy:** Neon automated active point-in-time recovery.
 
 ---
 
-## Performance Considerations
+## 3. Data Integration Workflows
 
-### Frontend (Vercel)
-- **Cold start**: None (pre-built and cached)
-- **Response time**: <100ms (CDN)
-- **Build time**: ~2-3 minutes
-- **Deployments**: Automatic on git push
+### 3.1 Authenticated Session Lifecycle
+1. User supplies corporate credentials at the React Front-End.
+2. Front-End initiates a secure `POST /api/auth/login` containing email and password.
+3. Backend matches credentials using hashed password verification (`bcrypt.compare`).
+4. On success, Backend returns a short-lived JSON Web Token (`VITE_API_URL` Access Token) and drops a 7-day security cookie (`JWT_REFRESH_SECRET` Refresh Token) with `HttpOnly`, `Secure`, and `SameSite=Lax` properties.
+5. In subsequent sessions, frontend Axios interceptors catch expiring tokens and silently refresh them against `/api/auth/refresh` using cookie parameters.
 
-### Backend (HuggingFace)
-- **Cold start**: ~30-60 seconds after inactivity
-- **Response time**: 200-500ms
-- **Note**: Free tier has sleep timeout
+### 3.2 Dynamic Score Calculation Engine
+To prevent rounding errors, the mathematical progression calculation is fully synchronized across the client (Vite React) and the server (Node Prisma).
+* **Formula Reconciliation:** The platform computes progression scores dynamically based on the specific Unit of Measurement (`MIN`, `MAX`, `TIMELINE`, `ZERO`) to ensure absolute data alignment between the manager and employee dashboards.
 
-### ML Service (HuggingFace Spaces)
-- **Cold start**: ~60-120 seconds after inactivity
-- **Response time**: 500ms-2s (depends on model size)
-- **Note**: Free tier has sleep timeout
-
-### Database (Neon)
-- **Connection pool**: Managed automatically
-- **Query time**: 10-100ms (depends on query complexity)
-- **Availability**: 99.99% SLA
+### 3.3 Cascading Goal Synchronization
+* When a Manager registers a check-in progress update against a parent goal, a cascading database transaction queries all children sheets where `parentGoalId` is referenced. 
+* All records are locked via database transactions, updating the `actualValue`, progress metrics, and completion timelines downward in a secure waterfall.
 
 ---
 
-## Monitoring & Logging
+## 4. Operational Cost Matrix
 
-### Frontend Monitoring
-- Vercel built-in analytics
-- Browser console errors (DevTools)
-- Sentry integration (optional)
-
-### Backend Logs
-- HuggingFace Space logs
-- Application logs in console
-- Database query logs in Neon
-
-### ML Service Logs
-- HuggingFace Space logs
-- FastAPI logging
-- Model load status
-
-### Database Monitoring
-- Neon dashboard
-- Query performance
-- Connection pool status
-
----
-
-## Scaling Strategy
-
-### If Frontend Gets Slow
-1. Vercel auto-scales (no action needed)
-2. Check API response times (backend issue)
-3. Optimize React components (code issue)
-
-### If Backend Gets Slow
-1. Check database query performance
-2. Add caching layer (Redis) - future upgrade
-3. Upgrade HF Spaces instance (paid)
-
-### If ML Service Gets Slow
-1. Check model inference time
-2. Upgrade to larger HF Spaces instance
-3. Cache predictions (future upgrade)
-
-### If Database Gets Slow
-1. Add indexes to frequently queried fields
-2. Optimize queries
-3. Upgrade Neon tier
-
----
-
-## Security Considerations
-
-### Frontend
-- ✅ Served over HTTPS
-- ✅ No sensitive data in localStorage (JWT only)
-- ✅ CORS headers configured
-- ⚠️ Never expose API keys in frontend code
-
-### Backend
-- ✅ JWT authentication
-- ✅ Database password in environment variables
-- ✅ CORS configured
-- ✅ Rate limiting (consider adding)
-
-### ML Service
-- ✅ CORS open (can be restricted)
-- ✅ No authentication (consider adding JWT)
-- ⚠️ Models not protected (consider encrypting)
-
-### Database
-- ✅ SSL connection required
-- ✅ Connection pooling for security
-- ✅ Neon managed authentication
-- ⚠️ Regular backups recommended
-
----
-
-## Cost Estimation
-
-| Service | Tier | Cost |
-|---------|------|------|
-| Vercel | Free | $0/month |
-| HuggingFace Backend | Free | $0/month |
-| HuggingFace ML Spaces | Free | $0/month (with sleep) |
-| Neon Database | Free | $0/month (with limits) |
-| **Total** | Free | **$0/month** |
-
-*Note: Upgrade to paid tiers as needed for better performance/reliability*
-
----
-
-## Next Steps for Production
-
-1. **Set up custom domain** for frontend
-2. **Add error tracking** (Sentry/LogRocket)
-3. **Configure monitoring** and alerts
-4. **Set up CI/CD** with GitHub Actions
-5. **Add rate limiting** to API
-6. **Implement caching** for frequently accessed data
-7. **Set up database backups** policy
-8. **Create incident response** playbook
+| Segment | Production Cloud Tier | Base Cost |
+|---|---|---|
+| **Frontend** | Vercel Hobby Tier | $0.00 / month |
+| **Backend API** | Hugging Face Free CPU Space | $0.00 / month |
+| **ML Engine** | Hugging Face Free CPU Space | $0.00 / month |
+| **Database** | Neon Serverless Free Tier | $0.00 / month |
+| **Total Costs** | **Distributed Cloud Stack** | **$0.00 / month** |

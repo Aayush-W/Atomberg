@@ -49,7 +49,7 @@ export const goalsService = {
   update: (id: string, data: Partial<Goal>) => api.put(`/goals/${id}`, data).then((r: any) => r.data.goal),
   delete: (id: string) => api.delete(`/goals/${id}`),
   submit: (id: string) => api.post(`/goals/${id}/submit`).then((r: any) => r.data.goal),
-  approve: (id: string) => api.post(`/goals/${id}/approve`).then((r: any) => r.data.goal),
+  approve: (id: string, edits?: { target?: number; weightage?: number }) => api.post(`/goals/${id}/approve`, edits ?? {}).then((r: any) => r.data.goal),
   reject: (id: string, comment: string) => api.post(`/goals/${id}/reject`, { comment }).then((r: any) => r.data.goal),
   lock: (id: string) => api.post(`/goals/${id}/lock`).then((r: any) => r.data.goal),
   unlock: (id: string) => api.post(`/goals/${id}/unlock`).then((r: any) => r.data.goal),

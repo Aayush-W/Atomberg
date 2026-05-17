@@ -464,7 +464,11 @@ export const createSharedGoal = asyncHandler(async (req: Request<unknown, unknow
       qualityScore: req.body.qualityScore,
       qualityFeedback: req.body.qualityFeedback as Prisma.InputJsonValue | undefined
     }
-  });`r`n`r`n  const childGoals = await Promise.all(
+  });
+
+  const childGoals = await Promise.all(
+
+
     childEmployeeIds.map((employeeId) =>
       prisma.goal.create({
         data: {

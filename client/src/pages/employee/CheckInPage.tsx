@@ -1,4 +1,4 @@
-import { useState } from 'react';
+﻿import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { MessageSquare, Calculator } from 'lucide-react';
@@ -10,12 +10,25 @@ const QUARTERS: Quarter[] = ['Q1', 'Q2', 'Q3', 'Q4'];
 
 function calcScore(goal: Goal, actual: number, completionDate?: string): number {
   const { uomType, target, targetDate } = goal;
-  if (uomType === 'MIN') return Math.min((actual / target) * 100, 120);
-  if (uomType === 'MAX') return actual === 0 ? 120 : Math.min((target / actual) * 100, 120);
+  // MIN: higher is better (e.g. sales revenue)
+  if (uomType === 'MIN') {
+    if (!target || target === 0) return 0;
+    return Math.round((actual / target) * 100);
+  }
+  // MAX: lower is better (e.g. cost, defects)
+  if (uomType === 'MAX') {
+    if (!target || target === 0 || actual === 0) return actual === 0 ? 100 : 0;
+    return Math.round((target / actual) * 100);
+  }
+  // ZERO: binary � zero = success
   if (uomType === 'ZERO') return actual === 0 ? 100 : 0;
+  // TIMELINE: score degrades 2 points per day past deadline
   if (uomType === 'TIMELINE' && completionDate && targetDate) {
-    const diff = (new Date(completionDate).getTime() - new Date(targetDate).getTime()) / (1000 * 60 * 60 * 24);
-    return Math.max(0, 100 - Math.max(0, diff / 30) * 10);
+    const diff = Math.floor(
+      (new Date(targetDate).getTime() - new Date(completionDate).getTime()) / (1000 * 60 * 60 * 24)
+    );
+    if (diff >= 0) return 100;
+    return Math.max(0, 100 + diff * 2);
   }
   return 0;
 }

@@ -71,6 +71,75 @@ export const getAchievementReport = asyncHandler(async (req: Request, res: Respo
   res.json({ report });
 });
 
+export const exportAchievementReport = asyncHandler(async (req: Request, res: Response) => {
+  const user = currentUser(req);
+  if (user.role !== Role.ADMIN && user.role !== Role.MANAGER) {
+    throw forbidden('Only managers and admins can export achievement reports');
+  }
+
+  const format = typeof req.query.format === 'string' ? req.query.format : 'csv';
+
+  const goals = await prisma.goal.findMany({
+    where: { cycle: { isActive: true }, ...scopeGoals(user) },
+    include: {
+      user: { select: { id: true, name: true, department: true, managerId: true } },
+      checkIns: { orderBy: { createdAt: 'desc' } }
+    }
+  });
+
+  const byUser = new Map<string, any>();
+  goals.forEach((goal) => {
+    const current = byUser.get(goal.user.id) ?? {
+      userId: goal.user.id,
+      name: goal.user.name,
+      department: goal.user.department,
+      goals: 0,
+      totalQualityScore: 0,
+      totalProgressScore: 0,
+      lockedGoals: 0
+    };
+    current.goals += 1;
+    if (typeof goal.qualityScore === 'number') current.totalQualityScore += goal.qualityScore;
+    current.totalProgressScore += latestProgress(goal.checkIns);
+    if (goal.status === 'LOCKED') current.lockedGoals += 1;
+    byUser.set(goal.user.id, current);
+  });
+
+  const rows = Array.from(byUser.values()).map((entry) => ({
+    Name: entry.name,
+    Department: entry.department,
+    'Total Goals': entry.goals,
+    'Avg Quality Score': entry.goals ? (entry.totalQualityScore / entry.goals).toFixed(2) : '0',
+    'Avg Progress Score (%)': entry.goals ? (entry.totalProgressScore / entry.goals).toFixed(2) : '0',
+    'Locked Goals': entry.lockedGoals
+  }));
+
+  const headers = Object.keys(rows[0] ?? { Name: '', Department: '', 'Total Goals': '', 'Avg Quality Score': '', 'Avg Progress Score (%)': '', 'Locked Goals': '' });
+  const delimiter = format === 'excel' ? '\t' : ',';
+  const escape = (val: string | number) => {
+    const str = String(val);
+    if (delimiter === ',' && (str.includes(',') || str.includes('"') || str.includes('\n'))) {
+      return `"${str.replace(/"/g, '""')}"`;
+    }
+    return str;
+  };
+
+  const csvLines = [
+    headers.map(escape).join(delimiter),
+    ...rows.map((row) => headers.map((h) => escape((row as any)[h] ?? '')).join(delimiter))
+  ];
+  const csvContent = csvLines.join('\n');
+
+  if (format === 'excel') {
+    res.setHeader('Content-Type', 'application/vnd.ms-excel');
+    res.setHeader('Content-Disposition', 'attachment; filename="achievement_report.xlsx"');
+  } else {
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', 'attachment; filename="achievement_report.csv"');
+  }
+  res.send(csvContent);
+});
+
 export const getCompletionReport = asyncHandler(async (req: Request, res: Response) => {
   const user = currentUser(req);
   if (user.role !== Role.ADMIN && user.role !== Role.MANAGER) {

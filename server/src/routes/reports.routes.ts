@@ -7,6 +7,7 @@ import { requireRole } from '../middleware/role.middleware';
 export const reportsRouter = Router();
 
 reportsRouter.use(requireAuth);
+reportsRouter.get('/achievement/export', requireRole(Role.MANAGER, Role.ADMIN), reportsController.exportAchievementReport);
 reportsRouter.get('/achievement', requireRole(Role.MANAGER, Role.ADMIN), reportsController.getAchievementReport);
 reportsRouter.get('/completion', requireRole(Role.MANAGER, Role.ADMIN), reportsController.getCompletionReport);
 reportsRouter.get('/manager-effectiveness', requireRole(Role.MANAGER, Role.ADMIN), reportsController.getManagerEffectivenessReport);

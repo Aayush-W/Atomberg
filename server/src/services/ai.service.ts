@@ -500,3 +500,42 @@ export async function parseChatOpsCommand(command: string, goals: ChatGoalContex
 
   return fallbackChatOpsParse(command, goals);
 }
+
+export async function narrativeIntelligence(input: {
+  sentiment: unknown;
+  risk: unknown;
+  portfolio: unknown;
+}) {
+  const text = await completeText(
+    'You are an executive performance analyst. Write a concise operational narrative with 3 short sections: momentum, risk, and recommended action. Then end with 3 bullet watchouts. Keep it factual and compact.',
+    JSON.stringify(input),
+    900
+  );
+
+  if (text) {
+    return { narrative: text };
+  }
+
+  const summary = input as {
+    sentiment: { latestAverage: number; engagementScore: number; alertFlags: string[] };
+    risk: { summary: { high: number; medium: number; low: number } };
+    portfolio: { avgProgress: number; pendingApprovals: number; dependencyLoad: number; goalCount: number };
+  };
+
+  const latest = summary.sentiment.latestAverage.toFixed(2);
+  const engagement = summary.sentiment.engagementScore.toFixed(0);
+  const highRisk = summary.risk.summary.high;
+  const pending = summary.portfolio.pendingApprovals;
+
+  return {
+    narrative: `Momentum: Portfolio progress is averaging ${summary.portfolio.avgProgress.toFixed(0)}% across ${summary.portfolio.goalCount} tracked goals, with engagement at ${engagement}% and latest sentiment at ${latest}.
+
+Risk: ${highRisk} employee(s) are currently in the high flight-risk bucket, there are ${pending} pending approvals, and the organization is carrying ${summary.portfolio.dependencyLoad} goal dependency links that may amplify delays.
+
+Recommended action: Reduce manager bottlenecks first, then intervene with the highest-risk employees using explainable evidence from sentiment, after-hours activity, and capacity concentration.
+
+- Watch approval turnaround on submitted goals.
+- Watch sentiment decline when progress stays high.
+- Watch heavily connected goals because one slip can cascade.` 
+  };
+}

@@ -2,7 +2,7 @@ import { Goal, GoalConflictSeverity, GoalConflictStatus } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { conflictCheck } from './ai.service';
 
-type GoalSummary = Pick<Goal, 'id' | 'cycleId' | 'title' | 'description' | 'thrustArea' | 'target' | 'uomType' | 'weightage'> & {
+type GoalSummary = Pick<Goal, 'id' | 'tenantId' | 'cycleId' | 'title' | 'description' | 'thrustArea' | 'target' | 'uomType' | 'weightage'> & {
   user?: { department: string };
 };
 
@@ -13,10 +13,11 @@ export async function refreshGoalConflictAlerts(goals: GoalSummary[]) {
 
   const result = await conflictCheck(goals);
   const cycleId = goals[0].cycleId;
+  const tenantId = goals[0].tenantId;
   const department = goals[0].user?.department ?? 'Unknown';
 
   const existing = await prisma.goalConflictAlert.findMany({
-    where: { cycleId, department, status: GoalConflictStatus.OPEN }
+    where: { tenantId, cycleId, department, status: GoalConflictStatus.OPEN }
   });
   const keepKeys = new Set<string>();
 
@@ -45,6 +46,7 @@ export async function refreshGoalConflictAlerts(goals: GoalSummary[]) {
 
     await prisma.goalConflictAlert.create({
       data: {
+        tenantId,
         goalAId: goalA.id,
         goalBId: goalB.id,
         cycleId,
@@ -65,7 +67,7 @@ export async function refreshGoalConflictAlerts(goals: GoalSummary[]) {
   }
 
   return prisma.goalConflictAlert.findMany({
-    where: { cycleId, department, status: GoalConflictStatus.OPEN },
+    where: { tenantId, cycleId, department, status: GoalConflictStatus.OPEN },
     orderBy: [{ severity: 'desc' }, { detectedAt: 'desc' }]
   });
 }

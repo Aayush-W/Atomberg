@@ -38,7 +38,9 @@ export const rejectGoalSchema = z.object({
 });
 
 export const approveGoalSchema = z.object({
-  comment: z.string().trim().optional()
+  comment: z.string().trim().optional(),
+  target: z.number().finite().optional(),
+  weightage: z.number().min(10).max(100).optional(),
 });
 
 export const sharedGoalSchema = z.object({

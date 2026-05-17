@@ -35,6 +35,7 @@ const AdminEscalations = lazy(() => import('@/pages/admin/EscalationsPage'));
 const AdminReports = lazy(() => import('@/pages/admin/ReportsPage'));
 const AdminAudit = lazy(() => import('@/pages/admin/AuditPage'));
 const AdminMLInsights = lazy(() => import('@/pages/admin/MLInsightsPage'));
+const AdminPlatform = lazy(() => import('@/pages/admin/PlatformPage'));
 
 // ─── Route Guards ────────────────────────────────────────────────────────────
 
@@ -277,10 +278,18 @@ export default function App() {
           }
         />
         <Route
+          path="admin/platform"
+          element={
+            <RequireRole roles={['ADMIN']}>
+              <AdminPlatform />
+            </RequireRole>
+          }
+        />
+        <Route
           path="admin/integrations"
           element={
             <RequireRole roles={['ADMIN']}>
-              <ManagerIntegrations />
+              <AdminPlatform />
             </RequireRole>
           }
         />

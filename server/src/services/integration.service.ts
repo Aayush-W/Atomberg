@@ -54,6 +54,7 @@ export async function applyGoalProgressSync(payload: SyncPayload) {
     : await prisma.checkIn.create({
         data: {
           ...(data as Prisma.CheckInUncheckedCreateInput),
+          tenantId: goal.tenantId,
           goalId: goal.id,
           userId: goal.userId,
           quarter
@@ -62,6 +63,7 @@ export async function applyGoalProgressSync(payload: SyncPayload) {
 
   await prisma.auditLog.create({
     data: {
+      tenantId: goal.tenantId,
       goalId: goal.id,
       userId: payload.actorUserId ?? goal.userId,
       action: `INTEGRATION_SYNC_${providerLabel}`,

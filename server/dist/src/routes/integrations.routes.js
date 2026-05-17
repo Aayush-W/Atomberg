@@ -11,3 +11,11 @@ exports.integrationsRouter.get('/teams/cards/:managerId', integrations_controlle
 exports.integrationsRouter.post('/teams/actions/:decision', integrations_controller_1.handleTeamsAction);
 exports.integrationsRouter.post('/sync/:provider', integrations_controller_1.simulateExternalSync);
 exports.integrationsRouter.post('/chatops/command', integrations_controller_1.handleChatOpsCommand);
+exports.integrationsRouter.get('/webhooks', integrations_controller_1.listWebhookEndpoints);
+exports.integrationsRouter.post('/webhooks', integrations_controller_1.createWebhookEndpoint);
+exports.integrationsRouter.post('/webhooks/:id/test', integrations_controller_1.testWebhookEndpoint);
+exports.integrationsRouter.get('/webhook-deliveries', integrations_controller_1.getWebhookDeliveries);
+exports.integrationsRouter.get('/feature-flags', integrations_controller_1.getFeatureFlags);
+exports.integrationsRouter.put('/feature-flags/:key', integrations_controller_1.updateFeatureFlag);
+exports.integrationsRouter.get('/platform', integrations_controller_1.getPlatformOverview);
+exports.integrationsRouter.get('/events', integrations_controller_1.listDomainEvents);

@@ -7,7 +7,8 @@ import {
   suggestThrustArea,
   sentimentTrends,
   teamSentiment,
-  flightRisk
+  flightRisk,
+  whatIfSimulation
 } from '../controllers/ml.controller';
 
 export const mlRouter = Router();
@@ -19,3 +20,4 @@ mlRouter.post('/suggest-thrust-area', suggestThrustArea);
 mlRouter.get('/sentiment-trends', sentimentTrends);
 mlRouter.get('/team-sentiment', teamSentiment);
 mlRouter.get('/flight-risk', flightRisk);
+mlRouter.post('/what-if', whatIfSimulation);

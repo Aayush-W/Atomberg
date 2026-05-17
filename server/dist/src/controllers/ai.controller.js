@@ -33,12 +33,14 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.performanceReviewDraft = exports.goalAutopilot = exports.goalSummary = exports.conversationalCheckin = exports.suggestWeightage = exports.conflictCheck = exports.smartRewrite = void 0;
+exports.narrativeIntelligence = exports.calibrationCopilot = exports.performanceReviewDraft = exports.goalAutopilot = exports.goalSummary = exports.conversationalCheckin = exports.suggestWeightage = exports.conflictCheck = exports.smartRewrite = void 0;
 const client_1 = require("@prisma/client");
 const aiSvc = __importStar(require("../services/ai.service"));
 const prisma_1 = require("../lib/prisma");
 const _helpers_1 = require("./_helpers");
 const errors_1 = require("../utils/errors");
+const decisionIntelligence_service_1 = require("../services/decisionIntelligence.service");
+const domainEvent_service_1 = require("../services/domainEvent.service");
 const AI_UNAVAILABLE = { error: { code: 'AI_UNAVAILABLE', message: 'AI service temporarily unavailable. Please try again later.' } };
 const smartRewrite = async (req, res, next) => {
     try {
@@ -99,8 +101,9 @@ exports.conversationalCheckin = conversationalCheckin;
 const goalSummary = async (req, res, next) => {
     try {
         const { employeeId } = req.body;
+        const user = (0, _helpers_1.currentUser)(req);
         const goals = await prisma_1.prisma.goal.findMany({
-            where: { userId: employeeId },
+            where: { tenantId: user.tenantId, userId: employeeId },
             include: { checkIns: true },
         });
         const result = await aiSvc.goalSummary({ goals });
@@ -139,6 +142,7 @@ const performanceReviewDraft = async (req, res, next) => {
         const employee = await prisma_1.prisma.user.findUnique({
             where: { id: employeeId },
             include: {
+                tenant: true,
                 manager: { select: { id: true, name: true } },
                 goals: {
                     include: {
@@ -160,6 +164,9 @@ const performanceReviewDraft = async (req, res, next) => {
         });
         if (!employee) {
             return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Employee not found' } });
+        }
+        if (employee.tenantId !== user.tenantId) {
+            throw (0, errors_1.forbidden)('Employee is outside your tenant');
         }
         if (user.role === client_1.Role.MANAGER && employee.managerId !== user.id) {
             throw (0, errors_1.forbidden)('Managers can only draft reviews for their direct reportees');
@@ -205,6 +212,18 @@ const performanceReviewDraft = async (req, res, next) => {
                 goalTitle: entry.goal?.title ?? null
             }))
         });
+        await (0, domainEvent_service_1.emitDomainEvent)({
+            tenantId: user.tenantId,
+            eventName: 'review.generated',
+            aggregateType: 'user',
+            aggregateId: employee.id,
+            payload: {
+                employeeId: employee.id,
+                employeeName: employee.name,
+                managerId: employee.managerId,
+                highlights: result.highlights
+            }
+        });
         res.json({
             employee: {
                 id: employee.id,
@@ -221,3 +240,30 @@ const performanceReviewDraft = async (req, res, next) => {
     }
 };
 exports.performanceReviewDraft = performanceReviewDraft;
+const calibrationCopilot = async (req, res, next) => {
+    try {
+        const user = (0, _helpers_1.currentUser)(req);
+        const managerId = user.role === client_1.Role.MANAGER && !req.query.managerId ? user.id : req.query.managerId;
+        const result = await (0, decisionIntelligence_service_1.buildCalibrationCopilot)(user.tenantId, managerId);
+        res.json(result);
+    }
+    catch (err) {
+        next(err);
+    }
+};
+exports.calibrationCopilot = calibrationCopilot;
+const narrativeIntelligence = async (req, res, next) => {
+    try {
+        const user = (0, _helpers_1.currentUser)(req);
+        const managerId = user.role === client_1.Role.MANAGER && !req.query.managerId ? user.id : req.query.managerId;
+        const inputs = await (0, decisionIntelligence_service_1.buildNarrativeInputs)(user.tenantId, managerId);
+        const result = await aiSvc.narrativeIntelligence(inputs);
+        res.json({ ...inputs, ...result });
+    }
+    catch (err) {
+        if (err?.status === 529 || err?.message?.includes('timeout'))
+            return res.status(503).json(AI_UNAVAILABLE);
+        next(err);
+    }
+};
+exports.narrativeIntelligence = narrativeIntelligence;

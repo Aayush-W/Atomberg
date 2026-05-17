@@ -11,10 +11,10 @@ export function ensureGoalWeightage(weightage: number): void {
   }
 }
 
-export async function getActiveCycleOrThrow(cycleId?: string) {
+export async function getActiveCycleOrThrow(tenantId: string, cycleId?: string) {
   const cycle = cycleId
-    ? await prisma.cycle.findUnique({ where: { id: cycleId } })
-    : await prisma.cycle.findFirst({ where: { isActive: true }, orderBy: { startDate: 'desc' } });
+    ? await prisma.cycle.findFirst({ where: { id: cycleId, tenantId } })
+    : await prisma.cycle.findFirst({ where: { tenantId, isActive: true }, orderBy: { startDate: 'desc' } });
 
   if (!cycle) {
     throw badRequest(cycleId ? 'Cycle not found' : 'No active cycle configured');
@@ -24,6 +24,9 @@ export async function getActiveCycleOrThrow(cycleId?: string) {
 }
 
 export async function ensureUserCanAccessGoal(user: AuthUser, goal: Goal): Promise<void> {
+  if (goal.tenantId !== user.tenantId) {
+    throw forbidden('You can only access goals in your tenant');
+  }
   if (user.role === Role.ADMIN || goal.userId === user.id) {
     return;
   }
@@ -39,6 +42,9 @@ export async function ensureUserCanAccessGoal(user: AuthUser, goal: Goal): Promi
 }
 
 export async function ensureManagerCanActOnGoal(user: AuthUser, goal: Goal): Promise<void> {
+  if (goal.tenantId !== user.tenantId) {
+    throw forbidden('Only managers in the same tenant can perform this action');
+  }
   if (user.role === Role.ADMIN) {
     return;
   }
@@ -54,6 +60,7 @@ export async function ensureManagerCanActOnGoal(user: AuthUser, goal: Goal): Pro
           where: {
             delegatorManagerId: owner.managerId,
             delegateManagerId: user.id,
+            tenantId: user.tenantId,
             isActive: true,
             startsAt: { lte: new Date() },
             endsAt: { gte: new Date() }
@@ -80,6 +87,7 @@ export async function ensureCanPushSharedGoal(user: AuthUser, employeeIds: strin
   const reportees = await prisma.user.count({
     where: {
       id: { in: employeeIds },
+      tenantId: user.tenantId,
       managerId: user.id
     }
   });
@@ -144,6 +152,7 @@ export async function ensureGoalSheetTotals(userId: string, cycleId: string): Pr
 }
 
 export async function createAuditLog(data: {
+  tenantId?: string;
   goalId: string;
   userId: string;
   action: string;
@@ -151,8 +160,22 @@ export async function createAuditLog(data: {
   oldValue?: string | null;
   newValue?: string | null;
 }): Promise<void> {
+  const tenantId =
+    data.tenantId ??
+    (
+      await prisma.goal.findUnique({
+        where: { id: data.goalId },
+        select: { tenantId: true }
+      })
+    )?.tenantId;
+
+  if (!tenantId) {
+    throw new Error('Unable to resolve tenant for audit log');
+  }
+
   await prisma.auditLog.create({
     data: {
+      tenantId,
       goalId: data.goalId,
       userId: data.userId,
       action: data.action,
@@ -176,6 +199,7 @@ export async function auditChangedFields(
     const newValue = after[field] instanceof Date ? after[field]?.toISOString() : after[field]?.toString() ?? null;
     if (oldValue !== newValue) {
       logs.push({
+        tenantId: before.tenantId,
         goalId: before.id,
         userId,
         action: before.lockedAt ? 'POST_LOCK_CHANGE' : 'GOAL_UPDATED',

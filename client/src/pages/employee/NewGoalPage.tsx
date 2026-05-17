@@ -30,7 +30,7 @@ const schema = z.object({
   uomType: z.enum(['MIN', 'MAX', 'TIMELINE', 'ZERO']),
   target: z.number().positive().optional(),
   targetDate: z.string().optional(),
-  weightage: z.number().min(10).max(80),
+  weightage: z.number().min(10).max(100),
   sensitivity: z.enum(['NORMAL', 'TECHNICAL', 'FINANCIAL']).default('NORMAL'),
 });
 type FormData = z.infer<typeof schema>;

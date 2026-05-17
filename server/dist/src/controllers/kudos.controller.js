@@ -12,9 +12,10 @@ exports.listKudos = (0, asyncHandler_1.asyncHandler)(async (req, res) => {
     const receiverId = typeof req.query.receiverId === 'string' ? req.query.receiverId : undefined;
     const where = user.role === client_1.Role.ADMIN
         ? receiverId
-            ? { receiverId }
-            : {}
+            ? { tenantId: user.tenantId, receiverId }
+            : { tenantId: user.tenantId }
         : {
+            tenantId: user.tenantId,
             OR: [{ receiverId: receiverId ?? user.id }, { senderId: user.id }]
         };
     const kudos = await prisma_1.prisma.kudos.findMany({
@@ -34,12 +35,12 @@ exports.createKudos = (0, asyncHandler_1.asyncHandler)(async (req, res) => {
     if (user.id === req.body.receiverId) {
         throw (0, errors_1.badRequest)('You cannot award kudos to yourself');
     }
-    const receiver = await prisma_1.prisma.user.findUnique({ where: { id: req.body.receiverId } });
+    const receiver = await prisma_1.prisma.user.findFirst({ where: { tenantId: user.tenantId, id: req.body.receiverId } });
     if (!receiver) {
         throw (0, errors_1.badRequest)('Receiver not found');
     }
     if (req.body.goalId) {
-        const goal = await prisma_1.prisma.goal.findUnique({ where: { id: req.body.goalId } });
+        const goal = await prisma_1.prisma.goal.findFirst({ where: { tenantId: user.tenantId, id: req.body.goalId } });
         if (!goal) {
             throw (0, errors_1.badRequest)('Linked goal not found');
         }
@@ -49,6 +50,7 @@ exports.createKudos = (0, asyncHandler_1.asyncHandler)(async (req, res) => {
     }
     const kudos = await prisma_1.prisma.kudos.create({
         data: {
+            tenantId: user.tenantId,
             senderId: user.id,
             receiverId: req.body.receiverId,
             goalId: req.body.goalId,
@@ -61,6 +63,6 @@ exports.createKudos = (0, asyncHandler_1.asyncHandler)(async (req, res) => {
             goal: { select: { id: true, title: true } }
         }
     });
-    await (0, notifications_controller_1.createNotification)(receiver.id, 'KUDOS_RECEIVED', `New ${req.body.badgeType.toLowerCase().replace(/_/g, ' ')} kudos`, `${user.name} recognized you for "${req.body.note}"`, undefined, { kudosId: kudos.id, goalId: req.body.goalId ?? null });
+    await (0, notifications_controller_1.createNotification)(receiver.id, 'KUDOS_RECEIVED', `New ${req.body.badgeType.toLowerCase().replace(/_/g, ' ')} kudos`, `${user.name} recognized you for "${req.body.note}"`, undefined, { kudosId: kudos.id, goalId: req.body.goalId ?? null }, user.tenantId);
     res.status(201).json({ kudos });
 });

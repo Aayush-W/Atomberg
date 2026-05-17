@@ -7,6 +7,11 @@ const client_1 = require("@prisma/client");
 const bcrypt_1 = __importDefault(require("bcrypt"));
 const prisma = new client_1.PrismaClient();
 async function main() {
+    await prisma.webhookDelivery.deleteMany();
+    await prisma.webhookEndpoint.deleteMany();
+    await prisma.domainEvent.deleteMany();
+    await prisma.apiIdempotencyKey.deleteMany();
+    await prisma.featureFlag.deleteMany();
     await prisma.escalationEvent.deleteMany();
     await prisma.goalConflictAlert.deleteMany();
     await prisma.kudos.deleteMany();
@@ -19,11 +24,24 @@ async function main() {
     await prisma.escalationRule.deleteMany();
     await prisma.cycle.deleteMany();
     await prisma.user.deleteMany();
+    await prisma.tenant.deleteMany();
+    const tenant = await prisma.tenant.create({
+        data: {
+            name: 'GoalForge Demo Org',
+            slug: 'demo-tenant',
+            webhookSecret: 'goalforge-demo-secret',
+            branding: {
+                primaryColor: '#5b6ef3',
+                accentColor: '#22c55e'
+            }
+        }
+    });
     const adminPassword = await bcrypt_1.default.hash('Admin@123', 10);
     const managerPassword = await bcrypt_1.default.hash('Manager@123', 10);
     const employeePassword = await bcrypt_1.default.hash('Employee@123', 10);
     const admin = await prisma.user.create({
         data: {
+            tenantId: tenant.id,
             name: 'Admin User',
             email: 'admin@goalforge.com',
             password: adminPassword,
@@ -36,6 +54,7 @@ async function main() {
     const managers = await Promise.all([
         prisma.user.create({
             data: {
+                tenantId: tenant.id,
                 name: 'Manager One',
                 email: 'manager1@goalforge.com',
                 password: managerPassword,
@@ -47,6 +66,7 @@ async function main() {
         }),
         prisma.user.create({
             data: {
+                tenantId: tenant.id,
                 name: 'Manager Two',
                 email: 'manager2@goalforge.com',
                 password: managerPassword,
@@ -58,6 +78,7 @@ async function main() {
         }),
         prisma.user.create({
             data: {
+                tenantId: tenant.id,
                 name: 'Manager Three',
                 email: 'manager3@goalforge.com',
                 password: managerPassword,
@@ -71,6 +92,7 @@ async function main() {
     const employees = await Promise.all([
         prisma.user.create({
             data: {
+                tenantId: tenant.id,
                 name: 'Alice Kim',
                 email: 'alice@goalforge.com',
                 password: employeePassword,
@@ -82,6 +104,7 @@ async function main() {
         }),
         prisma.user.create({
             data: {
+                tenantId: tenant.id,
                 name: 'Ben Carter',
                 email: 'ben@goalforge.com',
                 password: employeePassword,
@@ -93,6 +116,7 @@ async function main() {
         }),
         prisma.user.create({
             data: {
+                tenantId: tenant.id,
                 name: 'Carmen Diaz',
                 email: 'carmen@goalforge.com',
                 password: employeePassword,
@@ -104,6 +128,7 @@ async function main() {
         }),
         prisma.user.create({
             data: {
+                tenantId: tenant.id,
                 name: 'Daniel Lee',
                 email: 'daniel@goalforge.com',
                 password: employeePassword,
@@ -115,6 +140,7 @@ async function main() {
         }),
         prisma.user.create({
             data: {
+                tenantId: tenant.id,
                 name: 'Erika Patel',
                 email: 'erika@goalforge.com',
                 password: employeePassword,
@@ -126,6 +152,7 @@ async function main() {
         }),
         prisma.user.create({
             data: {
+                tenantId: tenant.id,
                 name: 'Felix Wang',
                 email: 'felix@goalforge.com',
                 password: employeePassword,
@@ -137,6 +164,7 @@ async function main() {
         }),
         prisma.user.create({
             data: {
+                tenantId: tenant.id,
                 name: 'Gia Shah',
                 email: 'gia@goalforge.com',
                 password: employeePassword,
@@ -148,6 +176,7 @@ async function main() {
         }),
         prisma.user.create({
             data: {
+                tenantId: tenant.id,
                 name: 'Hugo Martinez',
                 email: 'hugo@goalforge.com',
                 password: employeePassword,
@@ -159,6 +188,7 @@ async function main() {
         }),
         prisma.user.create({
             data: {
+                tenantId: tenant.id,
                 name: 'Isha Rao',
                 email: 'isha@goalforge.com',
                 password: employeePassword,
@@ -174,6 +204,7 @@ async function main() {
     ]);
     const cycle = await prisma.cycle.create({
         data: {
+            tenantId: tenant.id,
             name: 'FY 2026-27',
             startDate: new Date('2026-04-01T00:00:00Z'),
             endDate: new Date('2027-03-31T23:59:59Z'),
@@ -188,6 +219,7 @@ async function main() {
     const aliceGoals = await Promise.all([
         prisma.goal.create({
             data: {
+                tenantId: tenant.id,
                 userId: employees[0].id,
                 cycleId: cycle.id,
                 thrustArea: 'Innovation',
@@ -204,6 +236,7 @@ async function main() {
         }),
         prisma.goal.create({
             data: {
+                tenantId: tenant.id,
                 userId: employees[0].id,
                 cycleId: cycle.id,
                 thrustArea: 'Operational Excellence',
@@ -221,6 +254,7 @@ async function main() {
     ]);
     const goalDaniel = await prisma.goal.create({
         data: {
+            tenantId: tenant.id,
             userId: employees[3].id,
             cycleId: cycle.id,
             thrustArea: 'Revenue Growth',
@@ -238,6 +272,7 @@ async function main() {
     });
     const goalErika = await prisma.goal.create({
         data: {
+            tenantId: tenant.id,
             userId: employees[4].id,
             cycleId: cycle.id,
             thrustArea: 'Revenue Growth',
@@ -255,6 +290,7 @@ async function main() {
     });
     const goalHugo = await prisma.goal.create({
         data: {
+            tenantId: tenant.id,
             userId: employees[7].id,
             cycleId: cycle.id,
             thrustArea: 'Operational Excellence',
@@ -273,6 +309,7 @@ async function main() {
     });
     const sharedPrimary = await prisma.goal.create({
         data: {
+            tenantId: tenant.id,
             userId: employees[1].id,
             cycleId: cycle.id,
             thrustArea: 'Innovation',
@@ -290,6 +327,7 @@ async function main() {
     });
     const sharedChild = await prisma.goal.create({
         data: {
+            tenantId: tenant.id,
             userId: employees[2].id,
             cycleId: cycle.id,
             thrustArea: sharedPrimary.thrustArea,
@@ -313,6 +351,7 @@ async function main() {
     });
     await prisma.goalConflictAlert.create({
         data: {
+            tenantId: tenant.id,
             goalAId: aliceGoals[0].id,
             goalBId: aliceGoals[1].id,
             cycleId: cycle.id,
@@ -325,6 +364,7 @@ async function main() {
     await prisma.checkIn.createMany({
         data: [
             {
+                tenantId: tenant.id,
                 goalId: goalDaniel.id,
                 userId: employees[3].id,
                 quarter: client_1.Quarter.Q1,
@@ -337,6 +377,7 @@ async function main() {
                 sentiment: 0.46
             },
             {
+                tenantId: tenant.id,
                 goalId: goalErika.id,
                 userId: employees[4].id,
                 quarter: client_1.Quarter.Q1,
@@ -349,6 +390,7 @@ async function main() {
                 sentiment: 0.28
             },
             {
+                tenantId: tenant.id,
                 goalId: goalHugo.id,
                 userId: employees[7].id,
                 quarter: client_1.Quarter.Q1,
@@ -362,6 +404,7 @@ async function main() {
                 sentiment: 0.68
             },
             {
+                tenantId: tenant.id,
                 goalId: sharedPrimary.id,
                 userId: employees[1].id,
                 quarter: client_1.Quarter.Q1,
@@ -374,6 +417,7 @@ async function main() {
                 sentiment: 0.61
             },
             {
+                tenantId: tenant.id,
                 goalId: sharedChild.id,
                 userId: employees[2].id,
                 quarter: client_1.Quarter.Q1,
@@ -390,6 +434,7 @@ async function main() {
     const [goalSubmissionRule, approvalRule, checkinRule] = await Promise.all([
         prisma.escalationRule.create({
             data: {
+                tenantId: tenant.id,
                 name: 'Goal submission overdue',
                 triggerType: 'GOAL_NOT_SUBMITTED',
                 daysThreshold: 7,
@@ -398,6 +443,7 @@ async function main() {
         }),
         prisma.escalationRule.create({
             data: {
+                tenantId: tenant.id,
                 name: 'Approval pending escalation',
                 triggerType: 'APPROVAL_PENDING',
                 daysThreshold: 3,
@@ -406,6 +452,7 @@ async function main() {
         }),
         prisma.escalationRule.create({
             data: {
+                tenantId: tenant.id,
                 name: 'Missing quarterly check-in',
                 triggerType: 'CHECKIN_MISSING',
                 daysThreshold: 5,
@@ -415,6 +462,7 @@ async function main() {
     ]);
     await prisma.approvalDelegation.create({
         data: {
+            tenantId: tenant.id,
             delegatorManagerId: managers[0].id,
             delegateManagerId: managers[2].id,
             startsAt: new Date('2026-05-15T00:00:00Z'),
@@ -426,6 +474,7 @@ async function main() {
     await prisma.kudos.createMany({
         data: [
             {
+                tenantId: tenant.id,
                 senderId: employees[2].id,
                 receiverId: employees[1].id,
                 goalId: sharedPrimary.id,
@@ -433,6 +482,7 @@ async function main() {
                 note: 'Thanks for packaging the review playbook so clearly for the whole innovation team.'
             },
             {
+                tenantId: tenant.id,
                 senderId: employees[7].id,
                 receiverId: employees[4].id,
                 goalId: goalErika.id,
@@ -444,6 +494,7 @@ async function main() {
     await prisma.notification.createMany({
         data: [
             {
+                tenantId: tenant.id,
                 userId: employees[0].id,
                 type: 'GOAL_REMINDER',
                 channel: client_1.NotificationChannel.IN_APP,
@@ -451,6 +502,7 @@ async function main() {
                 message: 'Your Q1 goal sheet has been submitted and is awaiting manager approval.'
             },
             {
+                tenantId: tenant.id,
                 userId: managers[0].id,
                 type: 'APPROVAL_PENDING',
                 channel: client_1.NotificationChannel.TEAMS,
@@ -461,6 +513,7 @@ async function main() {
     });
     await prisma.escalationEvent.create({
         data: {
+            tenantId: tenant.id,
             uniqueKey: `${checkinRule.id}:${employees[5].id}:Q1:NUDGE`,
             ruleId: checkinRule.id,
             recipientUserId: employees[5].id,
@@ -475,6 +528,7 @@ async function main() {
     await prisma.auditLog.createMany({
         data: [
             {
+                tenantId: tenant.id,
                 goalId: aliceGoals[0].id,
                 userId: employees[0].id,
                 action: 'GOAL_SUBMITTED',
@@ -483,6 +537,7 @@ async function main() {
                 newValue: client_1.GoalStatus.SUBMITTED
             },
             {
+                tenantId: tenant.id,
                 goalId: goalDaniel.id,
                 userId: managers[1].id,
                 action: 'GOAL_APPROVED_FROM_MANAGER_FLOW',
@@ -491,6 +546,7 @@ async function main() {
                 newValue: client_1.GoalStatus.LOCKED
             },
             {
+                tenantId: tenant.id,
                 goalId: sharedPrimary.id,
                 userId: employees[2].id,
                 action: 'KUDOS_RECEIVED',
@@ -499,6 +555,49 @@ async function main() {
                 newValue: client_1.KudosBadgeType.COLLABORATOR
             }
         ]
+    });
+    await prisma.featureFlag.createMany({
+        data: [
+            {
+                tenantId: tenant.id,
+                key: 'outbound-webhooks',
+                description: 'Controls outbound domain-event webhook fan-out',
+                enabled: true,
+                metadata: { rollout: 'global' }
+            },
+            {
+                tenantId: tenant.id,
+                key: 'what-if-simulator',
+                description: 'Controls manager planning simulator',
+                enabled: true,
+                metadata: { rollout: 'manager-admin' }
+            },
+            {
+                tenantId: tenant.id,
+                key: 'calibration-copilot',
+                description: 'Controls calibration intelligence surfaces',
+                enabled: true,
+                metadata: { rollout: 'manager-admin' }
+            },
+            {
+                tenantId: tenant.id,
+                key: 'narrative-intelligence',
+                description: 'Controls narrative team intelligence summaries',
+                enabled: true,
+                metadata: { rollout: 'manager-admin' }
+            }
+        ]
+    });
+    await prisma.webhookEndpoint.create({
+        data: {
+            tenantId: tenant.id,
+            name: 'Demo Workday Connector',
+            url: 'https://example.com/webhooks/goalforge',
+            secret: 'demo-webhook-secret',
+            subscribedEvents: ['goal.created', 'goal.updated', 'checkin.updated', 'review.generated', 'risk.detected'],
+            isActive: false,
+            createdByUserId: admin.id
+        }
     });
     console.log(`Seed completed successfully with rules ${goalSubmissionRule.name}, ${approvalRule.name}, and ${checkinRule.name}.`);
 }

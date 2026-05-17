@@ -17,6 +17,9 @@ export type KudosBadgeType =
 
 export interface User {
   id: string;
+  tenantId: string;
+  tenantName: string;
+  tenantSlug: string;
   name: string;
   email: string;
   role: Role;
@@ -193,6 +196,13 @@ export interface FlightRiskEmployee {
   avgProgress: number;
   kudosCount: number;
   reasons: string[];
+  explainability: Array<{
+    factor: string;
+    value: string;
+    impact: 'HIGH' | 'MEDIUM' | 'LOW';
+    rationale: string;
+  }>;
+  confidence: number;
   recommendedAction: string;
 }
 
@@ -247,6 +257,67 @@ export interface PerformanceReviewDraftResponse {
   };
   draft: string;
   highlights: string[];
+}
+
+export interface CalibrationCopilotEmployee {
+  userId: string;
+  userName: string;
+  managerName?: string | null;
+  department: string;
+  avgProgress: number;
+  lockedRate: number;
+  avgSentiment: number;
+  kudosCount: number;
+  compositeScore: number;
+  suggestedRating: 'OUTSTANDING' | 'EXCEEDS' | 'MEETS' | 'DEVELOPING' | 'AT_RISK';
+  inflationRisk: 'HIGH' | 'MEDIUM' | 'LOW';
+  evidence: string[];
+  recommendation: string;
+}
+
+export interface CalibrationCopilotReport {
+  summary: {
+    teamSize: number;
+    scoreSpread: number;
+    inflationHotspots: number;
+    distribution: Record<string, number>;
+  };
+  employees: CalibrationCopilotEmployee[];
+}
+
+export interface NarrativeIntelligenceResponse {
+  narrative: string;
+  sentiment: TeamSentimentSummary;
+  risk: FlightRiskReport;
+  portfolio: {
+    goalCount: number;
+    pendingApprovals: number;
+    dependencyLoad: number;
+    avgProgress: number;
+  };
+}
+
+export interface WhatIfSimulationResponse {
+  goal: {
+    id: string;
+    title: string;
+    ownerName: string;
+  };
+  before: {
+    weightage: number;
+    ownerPortfolioWeight: number;
+    teamAverageProgress: number;
+    ownerRiskScore: number | null;
+    alignmentCoverage: number;
+  };
+  after: {
+    weightage: number;
+    ownerPortfolioWeight: number;
+    teamAverageProgress: number;
+    ownerRiskScore: number;
+    alignmentCoverage: number;
+  };
+  insights: string[];
 }
 
 export interface GoalAutopilotGoal {
@@ -352,6 +423,79 @@ export interface ChatOpsResponse {
     value: number | null;
     status: CheckInStatus | null;
   };
+}
+
+export interface WebhookDelivery {
+  id: string;
+  eventId: string;
+  eventName: string;
+  status: string;
+  statusCode?: number | null;
+  responseBody?: string | null;
+  attemptCount: number;
+  createdAt: string;
+  deliveredAt?: string | null;
+  endpoint?: {
+    id: string;
+    name: string;
+    url: string;
+  };
+}
+
+export interface WebhookEndpoint {
+  id: string;
+  name: string;
+  url: string;
+  secret: string;
+  subscribedEvents: string[];
+  isActive: boolean;
+  failureCount: number;
+  lastDeliveredAt?: string | null;
+  deliveries?: WebhookDelivery[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface FeatureFlag {
+  id: string;
+  key: string;
+  description?: string | null;
+  enabled: boolean;
+  metadata?: Record<string, unknown>;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface DomainEvent {
+  id: string;
+  aggregateType: string;
+  aggregateId: string;
+  eventName: string;
+  status: string;
+  correlationId?: string | null;
+  createdAt: string;
+  publishedAt?: string | null;
+  payload: Record<string, unknown>;
+}
+
+export interface PlatformOverviewResponse {
+  tenant: {
+    id: string;
+    name: string;
+    slug: string;
+    webhookSecret: string;
+    branding?: Record<string, unknown> | null;
+  } | null;
+  summary: {
+    activeWebhookEndpoints: number;
+    recentDeliveryFailures: number;
+    enabledFlags: number;
+    recordedEvents: number;
+  };
+  endpoints: WebhookEndpoint[];
+  deliveries: WebhookDelivery[];
+  flags: FeatureFlag[];
+  events: DomainEvent[];
 }
 
 // ---- Window status ----

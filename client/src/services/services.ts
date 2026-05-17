@@ -6,6 +6,8 @@ import type {
   ThrustAreaSuggestion, AnomalyResult, PredictionResult,
   EscalationRule, AuditLog, GoalAutopilotGoal, Kudos, ApprovalDelegation, TeamSentimentSummary, LeaderboardRow,
   PerformanceReviewDraftResponse, FlightRiskReport, ExternalSyncResult, ChatOpsResponse,
+  CalibrationCopilotReport, NarrativeIntelligenceResponse, WhatIfSimulationResponse, WebhookEndpoint, WebhookDelivery, FeatureFlag,
+  PlatformOverviewResponse, DomainEvent,
 } from '@/types';
 
 // ─── Auth ─────────────────────────────────────────────────────────────────────
@@ -115,6 +117,10 @@ export const aiService = {
     api.post('/ai/goal-summary', { employeeId }).then((r: any) => r.data as { summary: string }),
   performanceReview: (employeeId: string) =>
     api.post('/ai/performance-review', { employeeId }).then((r: any) => r.data as PerformanceReviewDraftResponse),
+  getCalibrationCopilot: (managerId?: string) =>
+    api.get('/ai/calibration-copilot', { params: managerId ? { managerId } : {} }).then((r: any) => r.data as CalibrationCopilotReport),
+  getNarrativeIntelligence: (managerId?: string) =>
+    api.get('/ai/narrative-intelligence', { params: managerId ? { managerId } : {} }).then((r: any) => r.data as NarrativeIntelligenceResponse),
 };
 
 // ─── ML ───────────────────────────────────────────────────────────────────────
@@ -132,6 +138,8 @@ export const mlService = {
     api.get('/ml/team-sentiment', { params: managerId ? { managerId } : {} }).then((r: any) => r.data as TeamSentimentSummary),
   getFlightRisk: (managerId?: string) =>
     api.get('/ml/flight-risk', { params: managerId ? { managerId } : {} }).then((r: any) => r.data as FlightRiskReport),
+  runWhatIf: (goalId: string, newWeightage: number) =>
+    api.post('/ml/what-if', { goalId, newWeightage }).then((r: any) => r.data as WhatIfSimulationResponse),
 };
 
 export const kudosService = {
@@ -156,4 +164,14 @@ export const integrationsService = {
   ) => api.post(`/integrations/sync/${provider}`, payload).then((r: any) => r.data as ExternalSyncResult),
   chatopsCommand: (platform: 'teams' | 'slack', command: string, quarter?: string) =>
     api.post('/integrations/chatops/command', { platform, command, quarter }).then((r: any) => r.data as ChatOpsResponse),
+  getWebhooks: () => api.get('/integrations/webhooks').then((r: any) => r.data.endpoints as WebhookEndpoint[]),
+  createWebhook: (payload: { name: string; url: string; secret: string; subscribedEvents: string[]; isActive?: boolean }) =>
+    api.post('/integrations/webhooks', payload).then((r: any) => r.data.endpoint as WebhookEndpoint),
+  testWebhook: (id: string) => api.post(`/integrations/webhooks/${id}/test`).then((r: any) => r.data),
+  getWebhookDeliveries: () => api.get('/integrations/webhook-deliveries').then((r: any) => r.data.deliveries as WebhookDelivery[]),
+  getFeatureFlags: () => api.get('/integrations/feature-flags').then((r: any) => r.data.flags as FeatureFlag[]),
+  updateFeatureFlag: (key: string, enabled: boolean, description?: string, metadata?: Record<string, unknown>) =>
+    api.put(`/integrations/feature-flags/${key}`, { enabled, description, metadata }).then((r: any) => r.data.flag as FeatureFlag),
+  getPlatformOverview: () => api.get('/integrations/platform').then((r: any) => r.data as PlatformOverviewResponse),
+  getDomainEvents: (take = 50) => api.get('/integrations/events', { params: { take } }).then((r: any) => r.data.events as DomainEvent[]),
 };

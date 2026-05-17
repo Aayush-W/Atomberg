@@ -21,6 +21,9 @@ function requiredEnv(name) {
 function toPublicUser(user) {
     return {
         id: user.id,
+        tenantId: user.tenantId,
+        tenantName: user.tenant.name,
+        tenantSlug: user.tenant.slug,
         email: user.email,
         name: user.name,
         role: user.role,
@@ -32,6 +35,8 @@ function toPublicUser(user) {
 function signAccessToken(user) {
     const payload = {
         sub: user.id,
+        tenantId: user.tenantId,
+        tenantSlug: user.tenantSlug,
         email: user.email,
         role: user.role,
         type: 'access'
@@ -41,6 +46,8 @@ function signAccessToken(user) {
 function signRefreshToken(user) {
     const payload = {
         sub: user.id,
+        tenantId: user.tenantId,
+        tenantSlug: user.tenantSlug,
         email: user.email,
         role: user.role,
         type: 'refresh'
@@ -58,6 +65,8 @@ function verifyRefreshToken(token) {
 function assertTokenPayload(decoded, type) {
     if (typeof decoded === 'string' ||
         typeof decoded.sub !== 'string' ||
+        typeof decoded.tenantId !== 'string' ||
+        typeof decoded.tenantSlug !== 'string' ||
         typeof decoded.email !== 'string' ||
         typeof decoded.role !== 'string' ||
         decoded.type !== type) {
@@ -65,6 +74,8 @@ function assertTokenPayload(decoded, type) {
     }
     return {
         sub: decoded.sub,
+        tenantId: decoded.tenantId,
+        tenantSlug: decoded.tenantSlug,
         email: decoded.email,
         role: decoded.role,
         type

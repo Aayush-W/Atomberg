@@ -9,6 +9,7 @@ const notifications_controller_1 = require("./notifications.controller");
 const goalRules_service_1 = require("../services/goalRules.service");
 const goalConflict_service_1 = require("../services/goalConflict.service");
 const teams_service_1 = require("../services/teams.service");
+const domainEvent_service_1 = require("../services/domainEvent.service");
 const goalInclude = {
     user: {
         select: {
@@ -95,12 +96,14 @@ async function refreshDepartmentConflictsForGoal(goal) {
     }
     const departmentGoals = await prisma_1.prisma.goal.findMany({
         where: {
+            tenantId: goal.tenantId,
             cycleId: goal.cycleId,
             status: { in: [client_1.GoalStatus.SUBMITTED, client_1.GoalStatus.APPROVED, client_1.GoalStatus.LOCKED] },
             user: { department: owner.department }
         },
         select: {
             id: true,
+            tenantId: true,
             cycleId: true,
             title: true,
             description: true,
@@ -115,12 +118,15 @@ async function refreshDepartmentConflictsForGoal(goal) {
 }
 exports.listOwnGoals = (0, asyncHandler_1.asyncHandler)(async (req, res) => {
     const user = currentUser(req);
-    const cycle = await prisma_1.prisma.cycle.findFirst({ where: { isActive: true }, orderBy: { startDate: 'desc' } });
+    const cycle = await prisma_1.prisma.cycle.findFirst({
+        where: { tenantId: user.tenantId, isActive: true },
+        orderBy: { startDate: 'desc' }
+    });
     if (!cycle) {
         return res.json({ goals: [] });
     }
     const goals = await prisma_1.prisma.goal.findMany({
-        where: { userId: user.id, cycleId: cycle.id },
+        where: { tenantId: user.tenantId, userId: user.id, cycleId: cycle.id },
         include: goalInclude,
         orderBy: { createdAt: 'asc' }
     });
@@ -132,14 +138,16 @@ exports.listTeamGoals = (0, asyncHandler_1.asyncHandler)(async (req, res) => {
         throw (0, errors_1.forbidden)('Only managers and admins can view team goals');
     }
     const goals = await prisma_1.prisma.goal.findMany({
-        where: user.role === client_1.Role.ADMIN ? undefined : { user: { managerId: user.id } },
+        where: user.role === client_1.Role.ADMIN ? { tenantId: user.tenantId } : { tenantId: user.tenantId, user: { managerId: user.id } },
         include: goalInclude,
         orderBy: [{ user: { name: 'asc' } }, { createdAt: 'asc' }]
     });
     res.json({ goals });
 });
-exports.listAllGoals = (0, asyncHandler_1.asyncHandler)(async (_req, res) => {
+exports.listAllGoals = (0, asyncHandler_1.asyncHandler)(async (req, res) => {
+    const user = currentUser(req);
     const goals = await prisma_1.prisma.goal.findMany({
+        where: { tenantId: user.tenantId },
         include: goalInclude,
         orderBy: [{ user: { department: 'asc' } }, { user: { name: 'asc' } }, { createdAt: 'asc' }]
     });
@@ -150,11 +158,12 @@ exports.createGoal = (0, asyncHandler_1.asyncHandler)(async (req, res) => {
     if (user.role !== client_1.Role.EMPLOYEE) {
         throw (0, errors_1.forbidden)('Only employees can create their own goals');
     }
-    const cycle = await (0, goalRules_service_1.getActiveCycleOrThrow)(req.body.cycleId);
+    const cycle = await (0, goalRules_service_1.getActiveCycleOrThrow)(user.tenantId, req.body.cycleId);
     (0, goalRules_service_1.ensureGoalWeightage)(req.body.weightage);
     await (0, goalRules_service_1.ensureGoalPortfolioLimits)(user.id, cycle.id, { weightage: req.body.weightage });
     const goal = await prisma_1.prisma.goal.create({
         data: {
+            tenantId: user.tenantId,
             userId: user.id,
             cycleId: cycle.id,
             thrustArea: req.body.thrustArea,
@@ -171,6 +180,18 @@ exports.createGoal = (0, asyncHandler_1.asyncHandler)(async (req, res) => {
         include: goalInclude
     });
     await (0, goalRules_service_1.createAuditLog)({ goalId: goal.id, userId: user.id, action: 'GOAL_CREATED' });
+    await (0, domainEvent_service_1.emitDomainEvent)({
+        tenantId: user.tenantId,
+        eventName: 'goal.created',
+        aggregateType: 'goal',
+        aggregateId: goal.id,
+        payload: {
+            goalId: goal.id,
+            ownerUserId: goal.userId,
+            title: goal.title,
+            weightage: goal.weightage
+        }
+    });
     res.status(201).json({ goal });
 });
 exports.updateGoal = (0, asyncHandler_1.asyncHandler)(async (req, res) => {
@@ -195,6 +216,18 @@ exports.updateGoal = (0, asyncHandler_1.asyncHandler)(async (req, res) => {
         'targetDate',
         'weightage'
     ]);
+    await (0, domainEvent_service_1.emitDomainEvent)({
+        tenantId: user.tenantId,
+        eventName: 'goal.updated',
+        aggregateType: 'goal',
+        aggregateId: after.id,
+        payload: {
+            goalId: after.id,
+            actorUserId: user.id,
+            title: after.title,
+            status: after.status
+        }
+    });
     res.json({ goal: after });
 });
 exports.deleteGoal = (0, asyncHandler_1.asyncHandler)(async (req, res) => {
@@ -234,8 +267,20 @@ exports.submitGoal = (0, asyncHandler_1.asyncHandler)(async (req, res) => {
             goalId: goal.id,
             employeeId: goal.user.id,
             adaptiveCard: card
-        });
+        }, user.tenantId);
     }
+    await (0, domainEvent_service_1.emitDomainEvent)({
+        tenantId: user.tenantId,
+        eventName: 'goal.submitted',
+        aggregateType: 'goal',
+        aggregateId: goal.id,
+        payload: {
+            goalId: goal.id,
+            ownerUserId: goal.userId,
+            managerId: goal.user.managerId,
+            title: goal.title
+        }
+    });
     res.json({ goal });
 });
 exports.approveGoal = (0, asyncHandler_1.asyncHandler)(async (req, res) => {
@@ -257,6 +302,18 @@ exports.approveGoal = (0, asyncHandler_1.asyncHandler)(async (req, res) => {
     });
     await (0, goalRules_service_1.auditChangedFields)(user.id, before, goal, ['status', 'lockedAt', 'managerComment']);
     await refreshDepartmentConflictsForGoal(goal);
+    await (0, domainEvent_service_1.emitDomainEvent)({
+        tenantId: user.tenantId,
+        eventName: 'goal.approved',
+        aggregateType: 'goal',
+        aggregateId: goal.id,
+        payload: {
+            goalId: goal.id,
+            actorUserId: user.id,
+            ownerUserId: goal.userId,
+            status: goal.status
+        }
+    });
     res.json({ goal });
 });
 exports.rejectGoal = (0, asyncHandler_1.asyncHandler)(async (req, res) => {
@@ -277,6 +334,18 @@ exports.rejectGoal = (0, asyncHandler_1.asyncHandler)(async (req, res) => {
     });
     await (0, goalRules_service_1.auditChangedFields)(user.id, before, goal, ['status', 'managerComment', 'lockedAt']);
     await refreshDepartmentConflictsForGoal(goal);
+    await (0, domainEvent_service_1.emitDomainEvent)({
+        tenantId: user.tenantId,
+        eventName: 'goal.rejected',
+        aggregateType: 'goal',
+        aggregateId: goal.id,
+        payload: {
+            goalId: goal.id,
+            actorUserId: user.id,
+            ownerUserId: goal.userId,
+            status: goal.status
+        }
+    });
     res.json({ goal });
 });
 exports.unlockGoal = (0, asyncHandler_1.asyncHandler)(async (req, res) => {
@@ -297,9 +366,9 @@ exports.createSharedGoal = (0, asyncHandler_1.asyncHandler)(async (req, res) => 
     const user = currentUser(req);
     const uniqueEmployeeIds = [...new Set(req.body.employeeIds)];
     await (0, goalRules_service_1.ensureCanPushSharedGoal)(user, uniqueEmployeeIds);
-    const cycle = await (0, goalRules_service_1.getActiveCycleOrThrow)(req.body.cycleId);
+    const cycle = await (0, goalRules_service_1.getActiveCycleOrThrow)(user.tenantId, req.body.cycleId);
     const employees = await prisma_1.prisma.user.findMany({
-        where: { id: { in: uniqueEmployeeIds }, role: client_1.Role.EMPLOYEE },
+        where: { tenantId: user.tenantId, id: { in: uniqueEmployeeIds }, role: client_1.Role.EMPLOYEE },
         select: { id: true }
     });
     if (employees.length !== uniqueEmployeeIds.length) {
@@ -309,6 +378,7 @@ exports.createSharedGoal = (0, asyncHandler_1.asyncHandler)(async (req, res) => 
     const [primaryEmployeeId, ...childEmployeeIds] = uniqueEmployeeIds;
     const parentGoal = await prisma_1.prisma.goal.create({
         data: {
+            tenantId: user.tenantId,
             userId: primaryEmployeeId,
             cycleId: cycle.id,
             thrustArea: req.body.thrustArea,
@@ -326,6 +396,7 @@ exports.createSharedGoal = (0, asyncHandler_1.asyncHandler)(async (req, res) => 
     });
     const childGoals = await Promise.all(childEmployeeIds.map((employeeId) => prisma_1.prisma.goal.create({
         data: {
+            tenantId: user.tenantId,
             userId: employeeId,
             cycleId: cycle.id,
             thrustArea: req.body.thrustArea,
@@ -345,7 +416,7 @@ exports.createSharedGoal = (0, asyncHandler_1.asyncHandler)(async (req, res) => 
     await (0, goalRules_service_1.createAuditLog)({ goalId: parentGoal.id, userId: user.id, action: 'SHARED_GOAL_CREATED' });
     await Promise.all(childGoals.map((goal) => (0, goalRules_service_1.createAuditLog)({ goalId: goal.id, userId: user.id, action: 'SHARED_GOAL_CREATED' })));
     const goals = await prisma_1.prisma.goal.findMany({
-        where: { id: { in: [parentGoal.id, ...childGoals.map((goal) => goal.id)] } },
+        where: { tenantId: user.tenantId, id: { in: [parentGoal.id, ...childGoals.map((goal) => goal.id)] } },
         include: goalInclude
     });
     res.status(201).json({ goals });
@@ -355,7 +426,7 @@ exports.getGoalAudit = (0, asyncHandler_1.asyncHandler)(async (req, res) => {
     const goal = await findGoalOrThrow(req.params.id);
     await (0, goalRules_service_1.ensureUserCanAccessGoal)(user, goal);
     const auditLogs = await prisma_1.prisma.auditLog.findMany({
-        where: { goalId: goal.id },
+        where: { tenantId: user.tenantId, goalId: goal.id },
         include: { user: { select: { id: true, email: true, name: true, role: true } } },
         orderBy: { timestamp: 'desc' }
     });
@@ -364,10 +435,10 @@ exports.getGoalAudit = (0, asyncHandler_1.asyncHandler)(async (req, res) => {
 exports.getDependencyGraph = (0, asyncHandler_1.asyncHandler)(async (req, res) => {
     const user = currentUser(req);
     const goalWhere = user.role === client_1.Role.ADMIN
-        ? {}
+        ? { tenantId: user.tenantId }
         : user.role === client_1.Role.MANAGER
-            ? { user: { managerId: user.id } }
-            : { userId: user.id };
+            ? { tenantId: user.tenantId, user: { managerId: user.id } }
+            : { tenantId: user.tenantId, userId: user.id };
     const goals = await prisma_1.prisma.goal.findMany({
         where: goalWhere,
         include: {
@@ -397,7 +468,7 @@ exports.getDependencyGraph = (0, asyncHandler_1.asyncHandler)(async (req, res) =
     }
     userIds.add(user.id);
     const users = await prisma_1.prisma.user.findMany({
-        where: { id: { in: [...userIds] } },
+        where: { tenantId: user.tenantId, id: { in: [...userIds] } },
         select: {
             id: true,
             name: true,
@@ -481,6 +552,7 @@ exports.addDependency = (0, asyncHandler_1.asyncHandler)(async (req, res) => {
     }
     const dependency = await prisma_1.prisma.goalDependency.create({
         data: {
+            tenantId: user.tenantId,
             dependentGoalId: dependentGoal.id,
             requiredGoalId: requiredGoal.id
         }
@@ -503,9 +575,9 @@ exports.importGoalPortfolio = (0, asyncHandler_1.asyncHandler)(async (req, res) 
     if (goals.length !== 5) {
         throw (0, errors_1.badRequest)('Portfolio import expects exactly 5 goals');
     }
-    const cycle = await (0, goalRules_service_1.getActiveCycleOrThrow)(req.body.cycleId);
+    const cycle = await (0, goalRules_service_1.getActiveCycleOrThrow)(user.tenantId, req.body.cycleId);
     const existing = await prisma_1.prisma.goal.findMany({
-        where: { userId: user.id, cycleId: cycle.id }
+        where: { tenantId: user.tenantId, userId: user.id, cycleId: cycle.id }
     });
     if (existing.some((goal) => goal.status !== client_1.GoalStatus.DRAFT && goal.status !== client_1.GoalStatus.REJECTED)) {
         throw (0, errors_1.badRequest)('Portfolio import is only available before any goals are submitted or approved');
@@ -516,12 +588,13 @@ exports.importGoalPortfolio = (0, asyncHandler_1.asyncHandler)(async (req, res) 
     }
     await prisma_1.prisma.$transaction(async (tx) => {
         await tx.goal.deleteMany({
-            where: { userId: user.id, cycleId: cycle.id, status: { in: [client_1.GoalStatus.DRAFT, client_1.GoalStatus.REJECTED] } }
+            where: { tenantId: user.tenantId, userId: user.id, cycleId: cycle.id, status: { in: [client_1.GoalStatus.DRAFT, client_1.GoalStatus.REJECTED] } }
         });
         for (const goal of goals) {
             (0, goalRules_service_1.ensureGoalWeightage)(goal.weightage);
             await tx.goal.create({
                 data: {
+                    tenantId: user.tenantId,
                     userId: user.id,
                     cycleId: cycle.id,
                     thrustArea: goal.thrustArea,
@@ -541,7 +614,7 @@ exports.importGoalPortfolio = (0, asyncHandler_1.asyncHandler)(async (req, res) 
         }
     });
     const importedGoals = await prisma_1.prisma.goal.findMany({
-        where: { userId: user.id, cycleId: cycle.id },
+        where: { tenantId: user.tenantId, userId: user.id, cycleId: cycle.id },
         include: goalInclude,
         orderBy: { createdAt: 'asc' }
     });

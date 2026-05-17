@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { prisma } from '../lib/prisma';
 import { z } from 'zod';
 import { runEscalationCheck } from '../jobs/escalation.job';
+import { currentUser } from './_helpers';
 
 const RuleSchema = z.object({
   name: z.string().min(1),
@@ -16,27 +17,37 @@ const RuleSchema = z.object({
 
 export const getRules = async (_req: Request, res: Response, next: NextFunction) => {
   try {
-    res.json(await prisma.escalationRule.findMany({ orderBy: { id: 'asc' } }));
+    const user = currentUser(_req);
+    res.json(await prisma.escalationRule.findMany({ where: { tenantId: user.tenantId }, orderBy: { id: 'asc' } }));
   } catch (err) { next(err); }
 };
 
 export const createRule = async (req: Request, res: Response, next: NextFunction) => {
   try {
+    const user = currentUser(req);
     const data = RuleSchema.parse(req.body);
-    res.status(201).json(await prisma.escalationRule.create({ data }));
+    res.status(201).json(await prisma.escalationRule.create({ data: { ...data, tenantId: user.tenantId } }));
   } catch (err) { next(err); }
 };
 
 export const updateRule = async (req: Request, res: Response, next: NextFunction) => {
   try {
+    const user = currentUser(req);
     const data = RuleSchema.partial().parse(req.body);
-    res.json(await prisma.escalationRule.update({ where: { id: req.params.id }, data }));
+    const updated = await prisma.escalationRule.updateMany({ where: { id: req.params.id, tenantId: user.tenantId }, data });
+    if (updated.count === 0) {
+      res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Escalation rule not found' } });
+      return;
+    }
+    res.json(await prisma.escalationRule.findFirst({ where: { id: req.params.id, tenantId: user.tenantId } }));
   } catch (err) { next(err); }
 };
 
 export const getLog = async (_req: Request, res: Response, next: NextFunction) => {
   try {
+    const user = currentUser(_req);
     const logs = await prisma.escalationEvent.findMany({
+      where: { tenantId: user.tenantId },
       orderBy: { createdAt: 'desc' },
       take: 100,
       include: {
@@ -50,7 +61,7 @@ export const getLog = async (_req: Request, res: Response, next: NextFunction) =
 
 export const triggerManual = async (_req: Request, res: Response, next: NextFunction) => {
   try {
-    await runEscalationCheck();
+    await runEscalationCheck(currentUser(_req).tenantId);
     res.json({ ok: true, message: 'Escalation check triggered' });
   } catch (err) { next(err); }
 };

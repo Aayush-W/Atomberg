@@ -50,10 +50,10 @@ export function calculateSentimentScore(parts: Array<string | null | undefined>)
   return Math.max(-1, Math.min(1, Number(raw.toFixed(3))));
 }
 
-export async function buildTeamSentimentSummary(managerId?: string) {
+export async function buildTeamSentimentSummary(tenantId: string, managerId?: string) {
   const where: Prisma.CheckInWhereInput = managerId
-    ? { goal: { user: { managerId } } }
-    : {};
+    ? { tenantId, goal: { user: { managerId, tenantId } } }
+    : { tenantId };
 
   const checkIns = await prisma.checkIn.findMany({
     where,

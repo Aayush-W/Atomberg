@@ -22,7 +22,10 @@ function setRefreshCookie(res, refreshToken) {
     });
 }
 exports.login = (0, asyncHandler_1.asyncHandler)(async (req, res) => {
-    const user = await prisma_1.prisma.user.findUnique({ where: { email: req.body.email } });
+    const user = await prisma_1.prisma.user.findUnique({
+        where: { email: req.body.email },
+        include: { tenant: true }
+    });
     if (!user) {
         throw (0, errors_1.unauthorized)('Invalid email or password');
     }
@@ -43,7 +46,10 @@ exports.refresh = (0, asyncHandler_1.asyncHandler)(async (req, res) => {
     }
     try {
         const payload = (0, auth_1.verifyRefreshToken)(token);
-        const user = await prisma_1.prisma.user.findUnique({ where: { id: payload.sub } });
+        const user = await prisma_1.prisma.user.findUnique({
+            where: { id: payload.sub },
+            include: { tenant: true }
+        });
         if (!user) {
             throw (0, errors_1.unauthorized)('User no longer exists');
         }
@@ -68,7 +74,10 @@ exports.me = (0, asyncHandler_1.asyncHandler)(async (req, res) => {
     if (!req.user) {
         throw (0, errors_1.unauthorized)();
     }
-    const user = await prisma_1.prisma.user.findUnique({ where: { id: req.user.id } });
+    const user = await prisma_1.prisma.user.findUnique({
+        where: { id: req.user.id },
+        include: { tenant: true }
+    });
     if (!user) {
         throw (0, errors_1.unauthorized)('User no longer exists');
     }

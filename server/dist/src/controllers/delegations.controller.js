@@ -9,8 +9,9 @@ const _helpers_1 = require("./_helpers");
 exports.listDelegations = (0, asyncHandler_1.asyncHandler)(async (req, res) => {
     const user = (0, _helpers_1.currentUser)(req);
     const where = user.role === client_1.Role.ADMIN
-        ? {}
+        ? { tenantId: user.tenantId }
         : {
+            tenantId: user.tenantId,
             OR: [{ delegatorManagerId: user.id }, { delegateManagerId: user.id }]
         };
     const delegations = await prisma_1.prisma.approvalDelegation.findMany({
@@ -35,8 +36,8 @@ exports.createDelegation = (0, asyncHandler_1.asyncHandler)(async (req, res) => 
     if (req.body.endsAt <= req.body.startsAt) {
         throw (0, errors_1.badRequest)('Delegation end date must be after the start date');
     }
-    const delegator = await prisma_1.prisma.user.findUnique({ where: { id: delegatorManagerId } });
-    const delegate = await prisma_1.prisma.user.findUnique({ where: { id: req.body.delegateManagerId } });
+    const delegator = await prisma_1.prisma.user.findFirst({ where: { tenantId: user.tenantId, id: delegatorManagerId } });
+    const delegate = await prisma_1.prisma.user.findFirst({ where: { tenantId: user.tenantId, id: req.body.delegateManagerId } });
     if (!delegator || delegator.role !== client_1.Role.MANAGER) {
         throw (0, errors_1.badRequest)('Delegator must be a manager');
     }
@@ -45,6 +46,7 @@ exports.createDelegation = (0, asyncHandler_1.asyncHandler)(async (req, res) => 
     }
     const delegation = await prisma_1.prisma.approvalDelegation.create({
         data: {
+            tenantId: user.tenantId,
             delegatorManagerId,
             delegateManagerId: req.body.delegateManagerId,
             startsAt: req.body.startsAt,

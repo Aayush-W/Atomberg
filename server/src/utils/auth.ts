@@ -1,5 +1,5 @@
 import jwt from 'jsonwebtoken';
-import { User } from '@prisma/client';
+import { Tenant, User } from '@prisma/client';
 import { AuthTokenPayload, PublicUser } from '../types/auth';
 
 const ACCESS_TOKEN_TTL = '15m';
@@ -13,9 +13,14 @@ function requiredEnv(name: 'JWT_SECRET' | 'JWT_REFRESH_SECRET'): string {
   return value;
 }
 
-export function toPublicUser(user: User): PublicUser {
+type UserWithTenant = User & { tenant: Tenant };
+
+export function toPublicUser(user: UserWithTenant): PublicUser {
   return {
     id: user.id,
+    tenantId: user.tenantId,
+    tenantName: user.tenant.name,
+    tenantSlug: user.tenant.slug,
     email: user.email,
     name: user.name,
     role: user.role,
@@ -28,6 +33,8 @@ export function toPublicUser(user: User): PublicUser {
 export function signAccessToken(user: PublicUser): string {
   const payload: AuthTokenPayload = {
     sub: user.id,
+    tenantId: user.tenantId,
+    tenantSlug: user.tenantSlug,
     email: user.email,
     role: user.role,
     type: 'access'
@@ -39,6 +46,8 @@ export function signAccessToken(user: PublicUser): string {
 export function signRefreshToken(user: PublicUser): string {
   const payload: AuthTokenPayload = {
     sub: user.id,
+    tenantId: user.tenantId,
+    tenantSlug: user.tenantSlug,
     email: user.email,
     role: user.role,
     type: 'refresh'
@@ -61,6 +70,8 @@ function assertTokenPayload(decoded: string | jwt.JwtPayload, type: 'access' | '
   if (
     typeof decoded === 'string' ||
     typeof decoded.sub !== 'string' ||
+    typeof decoded.tenantId !== 'string' ||
+    typeof decoded.tenantSlug !== 'string' ||
     typeof decoded.email !== 'string' ||
     typeof decoded.role !== 'string' ||
     decoded.type !== type
@@ -70,6 +81,8 @@ function assertTokenPayload(decoded: string | jwt.JwtPayload, type: 'access' | '
 
   return {
     sub: decoded.sub,
+    tenantId: decoded.tenantId,
+    tenantSlug: decoded.tenantSlug,
     email: decoded.email,
     role: decoded.role as AuthTokenPayload['role'],
     type

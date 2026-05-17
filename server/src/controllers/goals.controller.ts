@@ -26,6 +26,7 @@ import {
 } from '../services/goalRules.service';
 import { refreshGoalConflictAlerts } from '../services/goalConflict.service';
 import { buildAdaptiveGoalApprovalCard } from '../services/teams.service';
+import { emitDomainEvent } from '../services/domainEvent.service';
 
 const goalInclude = {
   user: {
@@ -111,12 +112,14 @@ async function refreshDepartmentConflictsForGoal(goal: Goal) {
 
   const departmentGoals = await prisma.goal.findMany({
     where: {
+      tenantId: goal.tenantId,
       cycleId: goal.cycleId,
       status: { in: [GoalStatus.SUBMITTED, GoalStatus.APPROVED, GoalStatus.LOCKED] },
       user: { department: owner.department }
     },
     select: {
       id: true,
+      tenantId: true,
       cycleId: true,
       title: true,
       description: true,
@@ -133,12 +136,15 @@ async function refreshDepartmentConflictsForGoal(goal: Goal) {
 
 export const listOwnGoals = asyncHandler(async (req: Request, res: Response) => {
   const user = currentUser(req);
-  const cycle = await prisma.cycle.findFirst({ where: { isActive: true }, orderBy: { startDate: 'desc' } });
+  const cycle = await prisma.cycle.findFirst({
+    where: { tenantId: user.tenantId, isActive: true },
+    orderBy: { startDate: 'desc' }
+  });
   if (!cycle) {
     return res.json({ goals: [] });
   }
   const goals = await prisma.goal.findMany({
-    where: { userId: user.id, cycleId: cycle.id },
+    where: { tenantId: user.tenantId, userId: user.id, cycleId: cycle.id },
     include: goalInclude,
     orderBy: { createdAt: 'asc' }
   });
@@ -153,15 +159,17 @@ export const listTeamGoals = asyncHandler(async (req: Request, res: Response) =>
   }
 
   const goals = await prisma.goal.findMany({
-    where: user.role === Role.ADMIN ? undefined : { user: { managerId: user.id } },
+    where: user.role === Role.ADMIN ? { tenantId: user.tenantId } : { tenantId: user.tenantId, user: { managerId: user.id } },
     include: goalInclude,
     orderBy: [{ user: { name: 'asc' } }, { createdAt: 'asc' }]
   });
   res.json({ goals });
 });
 
-export const listAllGoals = asyncHandler(async (_req: Request, res: Response) => {
+export const listAllGoals = asyncHandler(async (req: Request, res: Response) => {
+  const user = currentUser(req);
   const goals = await prisma.goal.findMany({
+    where: { tenantId: user.tenantId },
     include: goalInclude,
     orderBy: [{ user: { department: 'asc' } }, { user: { name: 'asc' } }, { createdAt: 'asc' }]
   });
@@ -174,12 +182,13 @@ export const createGoal = asyncHandler(async (req: Request<unknown, unknown, Cre
     throw forbidden('Only employees can create their own goals');
   }
 
-  const cycle = await getActiveCycleOrThrow(req.body.cycleId);
+  const cycle = await getActiveCycleOrThrow(user.tenantId, req.body.cycleId);
   ensureGoalWeightage(req.body.weightage);
   await ensureGoalPortfolioLimits(user.id, cycle.id, { weightage: req.body.weightage });
 
   const goal = await prisma.goal.create({
     data: {
+      tenantId: user.tenantId,
       userId: user.id,
       cycleId: cycle.id,
       thrustArea: req.body.thrustArea,
@@ -197,6 +206,18 @@ export const createGoal = asyncHandler(async (req: Request<unknown, unknown, Cre
   });
 
   await createAuditLog({ goalId: goal.id, userId: user.id, action: 'GOAL_CREATED' });
+  await emitDomainEvent({
+    tenantId: user.tenantId,
+    eventName: 'goal.created',
+    aggregateType: 'goal',
+    aggregateId: goal.id,
+    payload: {
+      goalId: goal.id,
+      ownerUserId: goal.userId,
+      title: goal.title,
+      weightage: goal.weightage
+    }
+  });
   res.status(201).json({ goal });
 });
 
@@ -225,6 +246,19 @@ export const updateGoal = asyncHandler(async (req: Request<{ id: string }, unkno
     'targetDate',
     'weightage'
   ]);
+
+  await emitDomainEvent({
+    tenantId: user.tenantId,
+    eventName: 'goal.updated',
+    aggregateType: 'goal',
+    aggregateId: after.id,
+    payload: {
+      goalId: after.id,
+      actorUserId: user.id,
+      title: after.title,
+      status: after.status
+    }
+  });
 
   res.json({ goal: after });
 });
@@ -278,9 +312,23 @@ export const submitGoal = asyncHandler(async (req: Request<{ id: string }>, res:
         goalId: goal.id,
         employeeId: goal.user.id,
         adaptiveCard: card
-      }
+      },
+      user.tenantId
     );
   }
+
+  await emitDomainEvent({
+    tenantId: user.tenantId,
+    eventName: 'goal.submitted',
+    aggregateType: 'goal',
+    aggregateId: goal.id,
+    payload: {
+      goalId: goal.id,
+      ownerUserId: goal.userId,
+      managerId: goal.user.managerId,
+      title: goal.title
+    }
+  });
 
   res.json({ goal });
 });
@@ -293,19 +341,37 @@ export const approveGoal = asyncHandler(async (req: Request<{ id: string }, unkn
     throw badRequest('Only submitted goals can be approved');
   }
 
+  // Allow manager to adjust target / weightage inline before locking
+  const managerEdits: { target?: number; weightage?: number } = {};
+  if (req.body.target !== undefined) managerEdits.target = req.body.target;
+  if (req.body.weightage !== undefined) managerEdits.weightage = req.body.weightage;
+
   await ensureGoalSheetTotals(before.userId, before.cycleId);
   const goal = await prisma.goal.update({
     where: { id: before.id },
     data: {
       status: GoalStatus.LOCKED,
       lockedAt: new Date(),
-      managerComment: req.body.comment
+      managerComment: req.body.comment,
+      ...managerEdits
     },
     include: goalInclude
   });
 
   await auditChangedFields(user.id, before, goal, ['status', 'lockedAt', 'managerComment']);
   await refreshDepartmentConflictsForGoal(goal);
+  await emitDomainEvent({
+    tenantId: user.tenantId,
+    eventName: 'goal.approved',
+    aggregateType: 'goal',
+    aggregateId: goal.id,
+    payload: {
+      goalId: goal.id,
+      actorUserId: user.id,
+      ownerUserId: goal.userId,
+      status: goal.status
+    }
+  });
   res.json({ goal });
 });
 
@@ -329,6 +395,18 @@ export const rejectGoal = asyncHandler(async (req: Request<{ id: string }, unkno
 
   await auditChangedFields(user.id, before, goal, ['status', 'managerComment', 'lockedAt']);
   await refreshDepartmentConflictsForGoal(goal);
+  await emitDomainEvent({
+    tenantId: user.tenantId,
+    eventName: 'goal.rejected',
+    aggregateType: 'goal',
+    aggregateId: goal.id,
+    payload: {
+      goalId: goal.id,
+      actorUserId: user.id,
+      ownerUserId: goal.userId,
+      status: goal.status
+    }
+  });
   res.json({ goal });
 });
 
@@ -352,10 +430,10 @@ export const createSharedGoal = asyncHandler(async (req: Request<unknown, unknow
   const user = currentUser(req);
   const uniqueEmployeeIds = [...new Set(req.body.employeeIds)];
   await ensureCanPushSharedGoal(user, uniqueEmployeeIds);
-  const cycle = await getActiveCycleOrThrow(req.body.cycleId);
+  const cycle = await getActiveCycleOrThrow(user.tenantId, req.body.cycleId);
 
   const employees = await prisma.user.findMany({
-    where: { id: { in: uniqueEmployeeIds }, role: Role.EMPLOYEE },
+    where: { tenantId: user.tenantId, id: { in: uniqueEmployeeIds }, role: Role.EMPLOYEE },
     select: { id: true }
   });
   if (employees.length !== uniqueEmployeeIds.length) {
@@ -371,6 +449,7 @@ export const createSharedGoal = asyncHandler(async (req: Request<unknown, unknow
   const [primaryEmployeeId, ...childEmployeeIds] = uniqueEmployeeIds;
   const parentGoal = await prisma.goal.create({
     data: {
+      tenantId: user.tenantId,
       userId: primaryEmployeeId,
       cycleId: cycle.id,
       thrustArea: req.body.thrustArea,
@@ -380,17 +459,16 @@ export const createSharedGoal = asyncHandler(async (req: Request<unknown, unknow
       target: req.body.target,
       targetDate: req.body.targetDate,
       weightage: req.body.weightage,
-      isShared: false,
+      isShared: true,
       sensitivity: req.body.sensitivity,
       qualityScore: req.body.qualityScore,
       qualityFeedback: req.body.qualityFeedback as Prisma.InputJsonValue | undefined
     }
-  });
-
-  const childGoals = await Promise.all(
+  });`r`n`r`n  const childGoals = await Promise.all(
     childEmployeeIds.map((employeeId) =>
       prisma.goal.create({
         data: {
+          tenantId: user.tenantId,
           userId: employeeId,
           cycleId: cycle.id,
           thrustArea: req.body.thrustArea,
@@ -414,7 +492,7 @@ export const createSharedGoal = asyncHandler(async (req: Request<unknown, unknow
   await Promise.all(childGoals.map((goal) => createAuditLog({ goalId: goal.id, userId: user.id, action: 'SHARED_GOAL_CREATED' })));
 
   const goals = await prisma.goal.findMany({
-    where: { id: { in: [parentGoal.id, ...childGoals.map((goal) => goal.id)] } },
+    where: { tenantId: user.tenantId, id: { in: [parentGoal.id, ...childGoals.map((goal) => goal.id)] } },
     include: goalInclude
   });
 
@@ -427,7 +505,7 @@ export const getGoalAudit = asyncHandler(async (req: Request<{ id: string }>, re
   await ensureUserCanAccessGoal(user, goal);
 
   const auditLogs = await prisma.auditLog.findMany({
-    where: { goalId: goal.id },
+    where: { tenantId: user.tenantId, goalId: goal.id },
     include: { user: { select: { id: true, email: true, name: true, role: true } } },
     orderBy: { timestamp: 'desc' }
   });
@@ -438,10 +516,10 @@ export const getDependencyGraph = asyncHandler(async (req: Request, res: Respons
   const user = currentUser(req);
   const goalWhere: Prisma.GoalWhereInput =
     user.role === Role.ADMIN
-      ? {}
+      ? { tenantId: user.tenantId }
       : user.role === Role.MANAGER
-        ? { user: { managerId: user.id } }
-        : { userId: user.id };
+        ? { tenantId: user.tenantId, user: { managerId: user.id } }
+        : { tenantId: user.tenantId, userId: user.id };
 
   const goals = await prisma.goal.findMany({
     where: goalWhere,
@@ -475,7 +553,7 @@ export const getDependencyGraph = asyncHandler(async (req: Request, res: Respons
   userIds.add(user.id);
 
   const users = await prisma.user.findMany({
-    where: { id: { in: [...userIds] } },
+    where: { tenantId: user.tenantId, id: { in: [...userIds] } },
     select: {
       id: true,
       name: true,
@@ -566,6 +644,7 @@ export const addDependency = asyncHandler(async (req: Request<{ id: string }, un
 
   const dependency = await prisma.goalDependency.create({
     data: {
+      tenantId: user.tenantId,
       dependentGoalId: dependentGoal.id,
       requiredGoalId: requiredGoal.id
     }
@@ -593,9 +672,9 @@ export const importGoalPortfolio = asyncHandler(async (req: Request, res: Respon
     throw badRequest('Portfolio import expects exactly 5 goals');
   }
 
-  const cycle = await getActiveCycleOrThrow(req.body.cycleId);
+  const cycle = await getActiveCycleOrThrow(user.tenantId, req.body.cycleId);
   const existing = await prisma.goal.findMany({
-    where: { userId: user.id, cycleId: cycle.id }
+    where: { tenantId: user.tenantId, userId: user.id, cycleId: cycle.id }
   });
 
   if (existing.some((goal) => goal.status !== GoalStatus.DRAFT && goal.status !== GoalStatus.REJECTED)) {
@@ -609,13 +688,14 @@ export const importGoalPortfolio = asyncHandler(async (req: Request, res: Respon
 
   await prisma.$transaction(async (tx) => {
     await tx.goal.deleteMany({
-      where: { userId: user.id, cycleId: cycle.id, status: { in: [GoalStatus.DRAFT, GoalStatus.REJECTED] } }
+      where: { tenantId: user.tenantId, userId: user.id, cycleId: cycle.id, status: { in: [GoalStatus.DRAFT, GoalStatus.REJECTED] } }
     });
 
     for (const goal of goals) {
       ensureGoalWeightage(goal.weightage);
       await tx.goal.create({
         data: {
+          tenantId: user.tenantId,
           userId: user.id,
           cycleId: cycle.id,
           thrustArea: goal.thrustArea,
@@ -636,7 +716,7 @@ export const importGoalPortfolio = asyncHandler(async (req: Request, res: Respon
   });
 
   const importedGoals = await prisma.goal.findMany({
-    where: { userId: user.id, cycleId: cycle.id },
+    where: { tenantId: user.tenantId, userId: user.id, cycleId: cycle.id },
     include: goalInclude,
     orderBy: { createdAt: 'asc' }
   });

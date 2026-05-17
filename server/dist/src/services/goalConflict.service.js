@@ -10,9 +10,10 @@ async function refreshGoalConflictAlerts(goals) {
     }
     const result = await (0, ai_service_1.conflictCheck)(goals);
     const cycleId = goals[0].cycleId;
+    const tenantId = goals[0].tenantId;
     const department = goals[0].user?.department ?? 'Unknown';
     const existing = await prisma_1.prisma.goalConflictAlert.findMany({
-        where: { cycleId, department, status: client_1.GoalConflictStatus.OPEN }
+        where: { tenantId, cycleId, department, status: client_1.GoalConflictStatus.OPEN }
     });
     const keepKeys = new Set();
     for (const item of result.conflicts) {
@@ -38,6 +39,7 @@ async function refreshGoalConflictAlerts(goals) {
         }
         await prisma_1.prisma.goalConflictAlert.create({
             data: {
+                tenantId,
                 goalAId: goalA.id,
                 goalBId: goalB.id,
                 cycleId,
@@ -56,7 +58,7 @@ async function refreshGoalConflictAlerts(goals) {
         });
     }
     return prisma_1.prisma.goalConflictAlert.findMany({
-        where: { cycleId, department, status: client_1.GoalConflictStatus.OPEN },
+        where: { tenantId, cycleId, department, status: client_1.GoalConflictStatus.OPEN },
         orderBy: [{ severity: 'desc' }, { detectedAt: 'desc' }]
     });
 }

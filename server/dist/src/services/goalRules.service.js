@@ -18,16 +18,19 @@ function ensureGoalWeightage(weightage) {
         throw (0, errors_1.badRequest)('Goal weightage must be between 10% and 100%', { field: 'weightage' });
     }
 }
-async function getActiveCycleOrThrow(cycleId) {
+async function getActiveCycleOrThrow(tenantId, cycleId) {
     const cycle = cycleId
-        ? await prisma_1.prisma.cycle.findUnique({ where: { id: cycleId } })
-        : await prisma_1.prisma.cycle.findFirst({ where: { isActive: true }, orderBy: { startDate: 'desc' } });
+        ? await prisma_1.prisma.cycle.findFirst({ where: { id: cycleId, tenantId } })
+        : await prisma_1.prisma.cycle.findFirst({ where: { tenantId, isActive: true }, orderBy: { startDate: 'desc' } });
     if (!cycle) {
         throw (0, errors_1.badRequest)(cycleId ? 'Cycle not found' : 'No active cycle configured');
     }
     return cycle;
 }
 async function ensureUserCanAccessGoal(user, goal) {
+    if (goal.tenantId !== user.tenantId) {
+        throw (0, errors_1.forbidden)('You can only access goals in your tenant');
+    }
     if (user.role === client_1.Role.ADMIN || goal.userId === user.id) {
         return;
     }
@@ -40,6 +43,9 @@ async function ensureUserCanAccessGoal(user, goal) {
     throw (0, errors_1.forbidden)('You can only access goals in your reporting scope');
 }
 async function ensureManagerCanActOnGoal(user, goal) {
+    if (goal.tenantId !== user.tenantId) {
+        throw (0, errors_1.forbidden)('Only managers in the same tenant can perform this action');
+    }
     if (user.role === client_1.Role.ADMIN) {
         return;
     }
@@ -53,6 +59,7 @@ async function ensureManagerCanActOnGoal(user, goal) {
                 where: {
                     delegatorManagerId: owner.managerId,
                     delegateManagerId: user.id,
+                    tenantId: user.tenantId,
                     isActive: true,
                     startsAt: { lte: new Date() },
                     endsAt: { gte: new Date() }
@@ -75,6 +82,7 @@ async function ensureCanPushSharedGoal(user, employeeIds) {
     const reportees = await prisma_1.prisma.user.count({
         where: {
             id: { in: employeeIds },
+            tenantId: user.tenantId,
             managerId: user.id
         }
     });
@@ -129,8 +137,17 @@ async function ensureGoalSheetTotals(userId, cycleId) {
     }
 }
 async function createAuditLog(data) {
+    const tenantId = data.tenantId ??
+        (await prisma_1.prisma.goal.findUnique({
+            where: { id: data.goalId },
+            select: { tenantId: true }
+        }))?.tenantId;
+    if (!tenantId) {
+        throw new Error('Unable to resolve tenant for audit log');
+    }
     await prisma_1.prisma.auditLog.create({
         data: {
+            tenantId,
             goalId: data.goalId,
             userId: data.userId,
             action: data.action,
@@ -147,6 +164,7 @@ async function auditChangedFields(userId, before, after, fields) {
         const newValue = after[field] instanceof Date ? after[field]?.toISOString() : after[field]?.toString() ?? null;
         if (oldValue !== newValue) {
             logs.push({
+                tenantId: before.tenantId,
                 goalId: before.id,
                 userId,
                 action: before.lockedAt ? 'POST_LOCK_CHANGE' : 'GOAL_UPDATED',

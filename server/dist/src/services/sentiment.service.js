@@ -47,10 +47,10 @@ function calculateSentimentScore(parts) {
     const raw = (positive - negative) / Math.max(1, positive + negative);
     return Math.max(-1, Math.min(1, Number(raw.toFixed(3))));
 }
-async function buildTeamSentimentSummary(managerId) {
+async function buildTeamSentimentSummary(tenantId, managerId) {
     const where = managerId
-        ? { goal: { user: { managerId } } }
-        : {};
+        ? { tenantId, goal: { user: { managerId, tenantId } } }
+        : { tenantId };
     const checkIns = await prisma_1.prisma.checkIn.findMany({
         where,
         include: {

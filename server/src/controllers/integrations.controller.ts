@@ -10,6 +10,9 @@ import { auditChangedFields, ensureGoalSheetTotals, ensureManagerCanActOnGoal } 
 import { applyGoalProgressSync, buildChatOpsReply } from '../services/integration.service';
 import { computeProgress, deriveCheckInStatus, quarterFromDate } from '../services/checkinProgress.service';
 import { parseChatOpsCommand } from '../services/ai.service';
+import { emitDomainEvent } from '../services/domainEvent.service';
+import { getIdempotentResponse, storeIdempotentResponse } from '../services/idempotency.service';
+import { listFeatureFlags, setFeatureFlag } from '../services/featureFlag.service';
 
 export const getTeamsCards = asyncHandler(async (req: Request<{ managerId: string }>, res: Response) => {
   const user = currentUser(req);
@@ -19,6 +22,7 @@ export const getTeamsCards = asyncHandler(async (req: Request<{ managerId: strin
 
   const cards = await prisma.notification.findMany({
     where: {
+      tenantId: user.tenantId,
       userId: req.params.managerId,
       channel: NotificationChannel.TEAMS
     },
@@ -83,8 +87,22 @@ export const handleTeamsAction = asyncHandler(async (req: Request<{ decision: st
     payload.decision === 'approve' ? 'Goal approved from Teams' : 'Goal returned from Teams',
     `Your goal "${before.title}" was ${payload.decision === 'approve' ? 'approved' : 'returned for rework'} from Microsoft Teams.`,
     NotificationChannel.IN_APP,
-    { goalId: before.id, actorId: user.id }
+    { goalId: before.id, actorId: user.id },
+    user.tenantId
   );
+
+  await emitDomainEvent({
+    tenantId: user.tenantId,
+    eventName: payload.decision === 'approve' ? 'goal.approved' : 'goal.rejected',
+    aggregateType: 'goal',
+    aggregateId: goal.id,
+    payload: {
+      goalId: goal.id,
+      title: before.title,
+      actorUserId: user.id,
+      status: goal.status
+    }
+  });
 
   res.json({ goal });
 });
@@ -124,19 +142,82 @@ async function syncPayloadFromRequest(provider: string, body: Record<string, unk
   });
 }
 
-export const receiveExternalWebhook = asyncHandler(async (req: Request<{ provider: string }>, res: Response) => {
-  const configuredSecret = process.env.GOALFORGE_WEBHOOK_SECRET || 'goalforge-demo-secret';
-  if (readWebhookSecret(req) !== configuredSecret) {
+async function resolveInboundTenant(req: Request) {
+  const tenantSlug = req.header('x-goalforge-tenant') ?? req.header('x-tenant-slug');
+  if (!tenantSlug) {
+    throw badRequest('x-goalforge-tenant header is required');
+  }
+
+  const tenant = await prisma.tenant.findUnique({ where: { slug: tenantSlug } });
+  if (!tenant) {
+    throw badRequest('Tenant not found for inbound webhook');
+  }
+
+  if (readWebhookSecret(req) !== tenant.webhookSecret) {
     throw forbidden('Invalid webhook secret');
   }
 
+  return tenant;
+}
+
+export const receiveExternalWebhook = asyncHandler(async (req: Request<{ provider: string }>, res: Response) => {
+  const tenant = await resolveInboundTenant(req);
+
+  const idempotencyKey = req.header('idempotency-key');
+  const routeFingerprint = `incoming-webhook:${tenant.slug}:${req.params.provider}`;
+  if (idempotencyKey) {
+    const existing = await getIdempotentResponse(tenant.id, idempotencyKey, routeFingerprint);
+    if (existing) {
+      return res.status(existing.statusCode).json(existing.responseBody);
+    }
+  }
+
   const result = await syncPayloadFromRequest(req.params.provider, req.body as Record<string, unknown>);
+  if (result.goal.tenantId !== tenant.id) {
+    throw forbidden('Goal does not belong to the supplied tenant');
+  }
+  await emitDomainEvent({
+    tenantId: tenant.id,
+    eventName: 'integration.sync.received',
+    aggregateType: 'goal',
+    aggregateId: result.goal.id,
+    payload: {
+      provider: req.params.provider,
+      goalId: result.goal.id,
+      checkInId: result.checkIn.id,
+      progressScore: result.progressScore
+    }
+  });
+  if (idempotencyKey) {
+    await storeIdempotentResponse({
+      tenantId: tenant.id,
+      idempotencyKey,
+      routeFingerprint,
+      statusCode: 200,
+      responseBody: result
+    });
+  }
   res.json(result);
 });
 
 export const simulateExternalSync = asyncHandler(async (req: Request<{ provider: string }>, res: Response) => {
   const user = currentUser(req);
   const result = await syncPayloadFromRequest(req.params.provider, req.body as Record<string, unknown>, user.id);
+  if (result.goal.tenantId !== user.tenantId) {
+    throw forbidden('Goal is outside your tenant');
+  }
+  await emitDomainEvent({
+    tenantId: user.tenantId,
+    eventName: 'integration.sync.simulated',
+    aggregateType: 'goal',
+    aggregateId: result.goal.id,
+    payload: {
+      provider: req.params.provider,
+      actorUserId: user.id,
+      goalId: result.goal.id,
+      progressScore: result.progressScore
+    }
+  });
   res.json(result);
 });
 
@@ -150,12 +231,13 @@ export const handleChatOpsCommand = asyncHandler(async (req: Request, res: Respo
 
   const where: Prisma.GoalWhereInput =
     user.role === Role.ADMIN
-      ? {}
+      ? { tenantId: user.tenantId }
       : user.role === Role.MANAGER
         ? {
+            tenantId: user.tenantId,
             OR: [{ userId: user.id }, { user: { managerId: user.id } }]
           }
-        : { userId: user.id };
+        : { tenantId: user.tenantId, userId: user.id };
 
   const goals = await prisma.goal.findMany({
     where,
@@ -199,6 +281,18 @@ export const handleChatOpsCommand = asyncHandler(async (req: Request, res: Respo
     const progressScore = latest
       ? computeProgress(updatedGoal, { actualValue: latest.actualValue, completionDate: latest.completionDate })
       : 0;
+    await emitDomainEvent({
+      tenantId: user.tenantId,
+      eventName: 'goal.updated',
+      aggregateType: 'goal',
+      aggregateId: updatedGoal.id,
+      payload: {
+        source: 'chatops',
+        platform,
+        actorUserId: user.id,
+        target: updatedGoal.target
+      }
+    });
     return res.json({
       platform,
       parsed,
@@ -232,6 +326,7 @@ export const handleChatOpsCommand = asyncHandler(async (req: Request, res: Respo
       })
     : await prisma.checkIn.create({
         data: {
+          tenantId: goal.tenantId,
           goalId: goal.id,
           userId: goal.userId,
           quarter,
@@ -244,11 +339,27 @@ export const handleChatOpsCommand = asyncHandler(async (req: Request, res: Respo
 
   await prisma.auditLog.create({
     data: {
+      tenantId: goal.tenantId,
       goalId: goal.id,
       userId: user.id,
       action: 'CHATOPS_COMMAND_EXECUTED',
       field: parsed.intent === 'update_status' ? 'status' : parsed.intent === 'update_target' ? 'target' : 'actualValue',
       newValue: parsed.intent === 'update_status' ? String(nextStatus) : String(parsed.value ?? nextActual)
+    }
+  });
+
+  await emitDomainEvent({
+    tenantId: user.tenantId,
+    eventName: 'checkin.updated',
+    aggregateType: 'goal',
+    aggregateId: goal.id,
+    payload: {
+      source: 'chatops',
+      platform,
+      actorUserId: user.id,
+      checkInId: checkIn.id,
+      progressScore: nextProgress,
+      status: nextStatus
     }
   });
 
@@ -262,4 +373,164 @@ export const handleChatOpsCommand = asyncHandler(async (req: Request, res: Respo
         ? `${platform === 'slack' ? 'Slack' : 'Teams'} bot updated "${goal.title}" to ${nextStatus}. Progress is now ${Math.min(nextProgress, 999)}%.`
         : `${platform === 'slack' ? 'Slack' : 'Teams'} bot updated "${goal.title}". Progress is now ${Math.min(nextProgress, 999)}%.`
   });
+});
+
+export const listWebhookEndpoints = asyncHandler(async (req: Request, res: Response) => {
+  const user = currentUser(req);
+  if (user.role !== Role.ADMIN) {
+    throw forbidden('Only admins can manage webhook endpoints');
+  }
+
+  const endpoints = await prisma.webhookEndpoint.findMany({
+    where: { tenantId: user.tenantId },
+    include: {
+      deliveries: {
+        orderBy: { createdAt: 'desc' },
+        take: 5
+      }
+    },
+    orderBy: { createdAt: 'desc' }
+  });
+
+  res.json({ endpoints });
+});
+
+export const createWebhookEndpoint = asyncHandler(async (req: Request, res: Response) => {
+  const user = currentUser(req);
+  if (user.role !== Role.ADMIN) {
+    throw forbidden('Only admins can create webhook endpoints');
+  }
+
+  const { name, url, secret, subscribedEvents = [] } = req.body;
+  if (!name || !url || !secret) {
+    throw badRequest('name, url, and secret are required');
+  }
+
+  const endpoint = await prisma.webhookEndpoint.create({
+    data: {
+      tenantId: user.tenantId,
+      name,
+      url,
+      secret,
+      subscribedEvents,
+      createdByUserId: user.id,
+      isActive: req.body.isActive ?? true
+    }
+  });
+
+  res.status(201).json({ endpoint });
+});
+
+export const testWebhookEndpoint = asyncHandler(async (req: Request<{ id: string }>, res: Response) => {
+  const user = currentUser(req);
+  if (user.role !== Role.ADMIN) {
+    throw forbidden('Only admins can test webhook endpoints');
+  }
+
+  const endpoint = await prisma.webhookEndpoint.findFirst({ where: { id: req.params.id, tenantId: user.tenantId } });
+  if (!endpoint) {
+    throw badRequest('Webhook endpoint not found');
+  }
+
+  await emitDomainEvent({
+    tenantId: user.tenantId,
+    eventName: 'webhook.test',
+    aggregateType: 'webhook-endpoint',
+    aggregateId: endpoint.id,
+    payload: {
+      endpointId: endpoint.id,
+      name: endpoint.name,
+      requestedBy: user.id
+    }
+  });
+
+  res.json({ ok: true });
+});
+
+export const getWebhookDeliveries = asyncHandler(async (req: Request, res: Response) => {
+  const user = currentUser(req);
+  if (user.role !== Role.ADMIN) {
+    throw forbidden('Only admins can view webhook deliveries');
+  }
+
+  const deliveries = await prisma.webhookDelivery.findMany({
+    where: { tenantId: user.tenantId },
+    include: {
+      endpoint: { select: { id: true, name: true, url: true } }
+    },
+    orderBy: { createdAt: 'desc' },
+    take: 100
+  });
+
+  res.json({ deliveries });
+});
+
+export const getFeatureFlags = asyncHandler(async (req: Request, res: Response) => {
+  const user = currentUser(req);
+  if (user.role !== Role.ADMIN) {
+    throw forbidden('Only admins can view feature flags');
+  }
+
+  const flags = await listFeatureFlags(user.tenantId);
+  res.json({ flags });
+});
+
+export const updateFeatureFlag = asyncHandler(async (req: Request<{ key: string }>, res: Response) => {
+  const user = currentUser(req);
+  if (user.role !== Role.ADMIN) {
+    throw forbidden('Only admins can update feature flags');
+  }
+
+  const enabled = typeof req.body.enabled === 'boolean' ? req.body.enabled : null;
+  if (enabled == null) {
+    throw badRequest('enabled must be provided as a boolean');
+  }
+
+  const flag = await setFeatureFlag(user.tenantId, req.params.key, enabled, req.body.description, req.body.metadata);
+  res.json({ flag });
+});
+
+export const getPlatformOverview = asyncHandler(async (req: Request, res: Response) => {
+  const user = currentUser(req);
+  if (user.role !== Role.ADMIN) {
+    throw forbidden('Only admins can view platform monitoring');
+  }
+
+  const [tenant, endpoints, deliveries, flags, events] = await Promise.all([
+    prisma.tenant.findUnique({ where: { id: user.tenantId } }),
+    prisma.webhookEndpoint.findMany({ where: { tenantId: user.tenantId }, orderBy: { createdAt: 'desc' } }),
+    prisma.webhookDelivery.findMany({ where: { tenantId: user.tenantId }, orderBy: { createdAt: 'desc' }, take: 25 }),
+    listFeatureFlags(user.tenantId),
+    prisma.domainEvent.findMany({ where: { tenantId: user.tenantId }, orderBy: { createdAt: 'desc' }, take: 25 })
+  ]);
+
+  res.json({
+    tenant,
+    summary: {
+      activeWebhookEndpoints: endpoints.filter((endpoint) => endpoint.isActive).length,
+      recentDeliveryFailures: deliveries.filter((delivery) => delivery.status === 'FAILED').length,
+      enabledFlags: flags.filter((flag) => flag.enabled).length,
+      recordedEvents: events.length
+    },
+    endpoints,
+    deliveries,
+    flags,
+    events
+  });
+});
+
+export const listDomainEvents = asyncHandler(async (req: Request, res: Response) => {
+  const user = currentUser(req);
+  if (user.role !== Role.ADMIN) {
+    throw forbidden('Only admins can view domain events');
+  }
+
+  const take = Math.min(100, Number(req.query.take ?? 50));
+  const events = await prisma.domainEvent.findMany({
+    where: { tenantId: user.tenantId },
+    orderBy: { createdAt: 'desc' },
+    take
+  });
+
+  res.json({ events });
 });

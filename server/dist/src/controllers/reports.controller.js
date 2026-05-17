@@ -11,10 +11,10 @@ const reporting_service_1 = require("../services/reporting.service");
 const sentiment_service_1 = require("../services/sentiment.service");
 function scopeGoals(user) {
     if (user.role === client_1.Role.ADMIN) {
-        return {};
+        return { tenantId: user.tenantId };
     }
     if (user.role === client_1.Role.MANAGER) {
-        return { user: { managerId: user.id } };
+        return { tenantId: user.tenantId, user: { managerId: user.id } };
     }
     throw (0, errors_1.forbidden)('Report access is restricted to managers and admins');
 }
@@ -73,6 +73,7 @@ exports.getCompletionReport = (0, asyncHandler_1.asyncHandler)(async (req, res) 
     }
     const employees = await prisma_1.prisma.user.findMany({
         where: {
+            tenantId: user.tenantId,
             role: client_1.Role.EMPLOYEE,
             ...(user.role === client_1.Role.MANAGER ? { managerId: user.id } : {})
         },
@@ -107,11 +108,11 @@ exports.getManagerEffectivenessReport = (0, asyncHandler_1.asyncHandler)(async (
         throw (0, errors_1.forbidden)('Only managers and admins can view effectiveness reports');
     }
     const managers = await prisma_1.prisma.user.findMany({
-        where: user.role === client_1.Role.ADMIN ? { role: client_1.Role.MANAGER } : { id: user.id, role: client_1.Role.MANAGER },
+        where: user.role === client_1.Role.ADMIN ? { tenantId: user.tenantId, role: client_1.Role.MANAGER } : { tenantId: user.tenantId, id: user.id, role: client_1.Role.MANAGER },
         select: { id: true, name: true, department: true }
     });
     const report = await Promise.all(managers.map(async (manager) => {
-        const teamMembers = await prisma_1.prisma.user.findMany({ where: { managerId: manager.id }, select: { id: true } });
+        const teamMembers = await prisma_1.prisma.user.findMany({ where: { tenantId: user.tenantId, managerId: manager.id }, select: { id: true } });
         const teamIds = teamMembers.map((member) => member.id);
         const goals = await prisma_1.prisma.goal.findMany({
             where: { userId: { in: teamIds }, cycle: { isActive: true } },
@@ -166,6 +167,7 @@ exports.getLeaderboards = (0, asyncHandler_1.asyncHandler)(async (req, res) => {
     }
     const employees = await prisma_1.prisma.user.findMany({
         where: {
+            tenantId: user.tenantId,
             role: client_1.Role.EMPLOYEE,
             ...(user.role === client_1.Role.MANAGER ? { managerId: user.id } : {})
         },
@@ -176,7 +178,7 @@ exports.getLeaderboards = (0, asyncHandler_1.asyncHandler)(async (req, res) => {
             }
         }
     });
-    const sentiment = await (0, sentiment_service_1.buildTeamSentimentSummary)(user.role === client_1.Role.MANAGER ? user.id : undefined);
+    const sentiment = await (0, sentiment_service_1.buildTeamSentimentSummary)(user.tenantId, user.role === client_1.Role.MANAGER ? user.id : undefined);
     const leaderboard = employees.reduce((acc, employee) => {
         const bucket = acc[employee.department] ?? {
             department: employee.department,
@@ -235,6 +237,9 @@ exports.getPerformanceDossier = (0, asyncHandler_1.asyncHandler)(async (req, res
     });
     if (!employee) {
         throw (0, errors_1.forbidden)('Employee not found');
+    }
+    if (employee.tenantId !== user.tenantId) {
+        throw (0, errors_1.forbidden)('Employee is outside your tenant');
     }
     const canView = user.role === client_1.Role.ADMIN ||
         user.id === employee.id ||

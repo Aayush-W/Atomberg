@@ -1,6 +1,7 @@
-import { useQuery } from '@tanstack/react-query';
+import { useEffect, useState } from 'react';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import { useAuthStore } from '@/stores/authStore';
-import { goalsService, usersService, mlService, reportsService } from '@/services/services';
+import { aiService, goalsService, mlService, reportsService, usersService } from '@/services/services';
 import { PageHeader, Spinner, ErrorState, ProgressBar } from '@/components/common';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, PieChart, Pie, Cell, BarChart, Bar, Legend } from 'recharts';
 
@@ -8,6 +9,9 @@ const COLORS = ['#5b6ef3', '#22c55e', '#f59e0b', '#ef4444', '#8b5cf6'];
 
 export default function ManagerAnalytics() {
   const user = useAuthStore((s) => s.user);
+  const [selectedGoalId, setSelectedGoalId] = useState('');
+  const [proposedWeightage, setProposedWeightage] = useState(20);
+
   const { data: team = [] } = useQuery({
     queryKey: ['team', user?.id],
     queryFn: () => usersService.getTeam(user?.id ?? ''),
@@ -28,6 +32,27 @@ export default function ManagerAnalytics() {
     queryKey: ['leaderboards'],
     queryFn: reportsService.getLeaderboards
   });
+  const { data: calibration } = useQuery({
+    queryKey: ['calibration-copilot', user?.id],
+    queryFn: () => aiService.getCalibrationCopilot(user?.id),
+    enabled: !!user?.id
+  });
+  const { data: narrative } = useQuery({
+    queryKey: ['narrative-intelligence', user?.id],
+    queryFn: () => aiService.getNarrativeIntelligence(user?.id),
+    enabled: !!user?.id
+  });
+
+  const whatIfMut = useMutation({
+    mutationFn: ({ goalId, newWeightage }: { goalId: string; newWeightage: number }) => mlService.runWhatIf(goalId, newWeightage)
+  });
+
+  useEffect(() => {
+    if (!selectedGoalId && teamGoals.length > 0) {
+      setSelectedGoalId(teamGoals[0].id);
+      setProposedWeightage(teamGoals[0].weightage);
+    }
+  }, [selectedGoalId, teamGoals]);
 
   if (!user || isLoading) return <div className="flex h-64 items-center justify-center"><Spinner size={32} /></div>;
   if (error) return <ErrorState onRetry={refetch} />;
@@ -56,7 +81,16 @@ export default function ManagerAnalytics() {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <PageHeader title="Team Analytics" subtitle="Performance, alignment, burnout, and flight-risk insights in one place" />
+      <PageHeader title="Team Analytics" subtitle="Performance, explainable risk, calibration, and planning intelligence in one place" />
+
+      {narrative ? (
+        <div className="card p-5">
+          <h3 className="font-semibold text-slate-800 dark:text-white">Narrative Intelligence</h3>
+          <div className="mt-4 whitespace-pre-wrap rounded-2xl bg-surface-50 p-4 text-sm leading-7 text-slate-700 dark:bg-surface-900/60 dark:text-slate-200">
+            {narrative.narrative}
+          </div>
+        </div>
+      ) : null}
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
         <div className="card p-5">
@@ -170,8 +204,8 @@ export default function ManagerAnalytics() {
       {flightRisk ? (
         <div className="card overflow-hidden p-0">
           <div className="border-b border-surface-100 px-5 py-4 dark:border-surface-800">
-            <h3 className="font-semibold text-slate-800 dark:text-white">Flight Risk Predictor</h3>
-            <p className="mt-0.5 text-xs text-slate-400">Uses after-hours activity, sentiment trend, max-capacity goals, progress, and kudos load.</p>
+            <h3 className="font-semibold text-slate-800 dark:text-white">Risk Explainability Panel</h3>
+            <p className="mt-0.5 text-xs text-slate-400">Each alert includes the evidence used, confidence, and recommended intervention.</p>
           </div>
           <div className="table-container rounded-none border-0">
             <table className="data-table">
@@ -179,9 +213,8 @@ export default function ManagerAnalytics() {
                 <tr>
                   <th>Employee</th>
                   <th>Risk</th>
-                  <th>Sentiment</th>
-                  <th>After-hours</th>
-                  <th>Load</th>
+                  <th>Why It Fired</th>
+                  <th>Confidence</th>
                   <th>Recommended Action</th>
                 </tr>
               </thead>
@@ -199,10 +232,9 @@ export default function ManagerAnalytics() {
                       </div>
                     </td>
                     <td className="text-xs text-slate-400">
-                      Avg {person.avgSentiment.toFixed(2)} · Trend {person.sentimentTrend.toFixed(2)}
+                      {person.explainability.slice(0, 2).map((item) => `${item.factor}: ${item.value}`).join(' · ')}
                     </td>
-                    <td className="text-xs text-slate-400">{Math.round(person.afterHoursActivityRate * 100)}%</td>
-                    <td className="text-xs text-slate-400">{person.maxCapacityGoals} max-load goals · Kudos {person.kudosCount}</td>
+                    <td className="text-xs text-slate-400">{Math.round(person.confidence * 100)}%</td>
                     <td className="text-xs text-slate-400">{person.recommendedAction}</td>
                   </tr>
                 ))}
@@ -211,6 +243,90 @@ export default function ManagerAnalytics() {
           </div>
         </div>
       ) : null}
+
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+        <div className="card p-5">
+          <h3 className="font-semibold text-slate-800 dark:text-white">What-If Planning Simulator</h3>
+          <p className="mt-1 text-xs text-slate-400">Preview the impact of reweighting a goal on capacity, risk, and alignment coverage.</p>
+          <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-[1fr,140px,auto]">
+            <select
+              value={selectedGoalId}
+              onChange={(e) => {
+                const next = teamGoals.find((goal) => goal.id === e.target.value);
+                setSelectedGoalId(e.target.value);
+                setProposedWeightage(next?.weightage ?? 20);
+              }}
+              className="input"
+            >
+              {teamGoals.map((goal) => (
+                <option key={goal.id} value={goal.id}>{goal.user?.name} - {goal.title}</option>
+              ))}
+            </select>
+            <input type="number" className="input" value={proposedWeightage} onChange={(e) => setProposedWeightage(Number(e.target.value))} />
+            <button onClick={() => selectedGoalId && whatIfMut.mutate({ goalId: selectedGoalId, newWeightage: proposedWeightage })} className="btn btn-primary" disabled={!selectedGoalId || whatIfMut.isPending}>
+              {whatIfMut.isPending ? 'Simulating...' : 'Run Scenario'}
+            </button>
+          </div>
+          {whatIfMut.data ? (
+            <div className="mt-4 rounded-2xl bg-surface-50 p-4 dark:bg-surface-900/60">
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                <div>
+                  <p className="text-xs text-slate-400">Owner Portfolio</p>
+                  <p className="text-sm font-semibold text-slate-800 dark:text-white">{whatIfMut.data.before.ownerPortfolioWeight}% → {whatIfMut.data.after.ownerPortfolioWeight}%</p>
+                </div>
+                <div>
+                  <p className="text-xs text-slate-400">Projected Risk</p>
+                  <p className="text-sm font-semibold text-slate-800 dark:text-white">{whatIfMut.data.before.ownerRiskScore ?? 'n/a'} → {whatIfMut.data.after.ownerRiskScore}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-slate-400">Alignment Coverage</p>
+                  <p className="text-sm font-semibold text-slate-800 dark:text-white">{whatIfMut.data.before.alignmentCoverage}% → {whatIfMut.data.after.alignmentCoverage}%</p>
+                </div>
+              </div>
+              <div className="mt-4 space-y-2 text-sm text-slate-500">
+                {whatIfMut.data.insights.map((insight) => <p key={insight}>{insight}</p>)}
+              </div>
+            </div>
+          ) : null}
+        </div>
+
+        <div className="card p-5">
+          <h3 className="font-semibold text-slate-800 dark:text-white">Calibration Copilot</h3>
+          <p className="mt-1 text-xs text-slate-400">Compare evidence across employees and spot possible rating inflation before review calibration.</p>
+          {calibration ? (
+            <div className="mt-4 space-y-3">
+              <div className="grid grid-cols-3 gap-3">
+                <div className="rounded-xl bg-surface-50 p-3 text-center dark:bg-surface-900/60">
+                  <p className="text-xs text-slate-400">Team Size</p>
+                  <p className="text-xl font-display font-bold text-white">{calibration.summary.teamSize}</p>
+                </div>
+                <div className="rounded-xl bg-surface-50 p-3 text-center dark:bg-surface-900/60">
+                  <p className="text-xs text-slate-400">Score Spread</p>
+                  <p className="text-xl font-display font-bold text-white">{calibration.summary.scoreSpread}</p>
+                </div>
+                <div className="rounded-xl bg-warning-500/10 p-3 text-center">
+                  <p className="text-xs text-slate-400">Inflation Hotspots</p>
+                  <p className="text-xl font-display font-bold text-warning-300">{calibration.summary.inflationHotspots}</p>
+                </div>
+              </div>
+              <div className="space-y-3">
+                {calibration.employees.slice(0, 4).map((employee) => (
+                  <div key={employee.userId} className="rounded-xl border border-surface-200 p-3 dark:border-surface-800">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <p className="font-semibold text-slate-800 dark:text-white">{employee.userName}</p>
+                        <p className="text-xs text-slate-400">{employee.suggestedRating} · Inflation {employee.inflationRisk}</p>
+                      </div>
+                      <span className="text-xs font-bold text-brand-400">{employee.compositeScore}</span>
+                    </div>
+                    <p className="mt-2 text-xs text-slate-400">{employee.evidence[0]}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
+        </div>
+      </div>
     </div>
   );
 }

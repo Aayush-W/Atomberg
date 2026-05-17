@@ -4,6 +4,7 @@ exports.triggerManual = exports.getLog = exports.updateRule = exports.createRule
 const prisma_1 = require("../lib/prisma");
 const zod_1 = require("zod");
 const escalation_job_1 = require("../jobs/escalation.job");
+const _helpers_1 = require("./_helpers");
 const RuleSchema = zod_1.z.object({
     name: zod_1.z.string().min(1),
     triggerType: zod_1.z.enum(['GOAL_NOT_SUBMITTED', 'APPROVAL_PENDING', 'CHECKIN_MISSING']),
@@ -16,7 +17,8 @@ const RuleSchema = zod_1.z.object({
 });
 const getRules = async (_req, res, next) => {
     try {
-        res.json(await prisma_1.prisma.escalationRule.findMany({ orderBy: { id: 'asc' } }));
+        const user = (0, _helpers_1.currentUser)(_req);
+        res.json(await prisma_1.prisma.escalationRule.findMany({ where: { tenantId: user.tenantId }, orderBy: { id: 'asc' } }));
     }
     catch (err) {
         next(err);
@@ -25,8 +27,9 @@ const getRules = async (_req, res, next) => {
 exports.getRules = getRules;
 const createRule = async (req, res, next) => {
     try {
+        const user = (0, _helpers_1.currentUser)(req);
         const data = RuleSchema.parse(req.body);
-        res.status(201).json(await prisma_1.prisma.escalationRule.create({ data }));
+        res.status(201).json(await prisma_1.prisma.escalationRule.create({ data: { ...data, tenantId: user.tenantId } }));
     }
     catch (err) {
         next(err);
@@ -35,8 +38,14 @@ const createRule = async (req, res, next) => {
 exports.createRule = createRule;
 const updateRule = async (req, res, next) => {
     try {
+        const user = (0, _helpers_1.currentUser)(req);
         const data = RuleSchema.partial().parse(req.body);
-        res.json(await prisma_1.prisma.escalationRule.update({ where: { id: req.params.id }, data }));
+        const updated = await prisma_1.prisma.escalationRule.updateMany({ where: { id: req.params.id, tenantId: user.tenantId }, data });
+        if (updated.count === 0) {
+            res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Escalation rule not found' } });
+            return;
+        }
+        res.json(await prisma_1.prisma.escalationRule.findFirst({ where: { id: req.params.id, tenantId: user.tenantId } }));
     }
     catch (err) {
         next(err);
@@ -45,7 +54,9 @@ const updateRule = async (req, res, next) => {
 exports.updateRule = updateRule;
 const getLog = async (_req, res, next) => {
     try {
+        const user = (0, _helpers_1.currentUser)(_req);
         const logs = await prisma_1.prisma.escalationEvent.findMany({
+            where: { tenantId: user.tenantId },
             orderBy: { createdAt: 'desc' },
             take: 100,
             include: {
@@ -62,7 +73,7 @@ const getLog = async (_req, res, next) => {
 exports.getLog = getLog;
 const triggerManual = async (_req, res, next) => {
     try {
-        await (0, escalation_job_1.runEscalationCheck)();
+        await (0, escalation_job_1.runEscalationCheck)((0, _helpers_1.currentUser)(_req).tenantId);
         res.json({ ok: true, message: 'Escalation check triggered' });
     }
     catch (err) {

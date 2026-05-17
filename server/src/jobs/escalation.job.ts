@@ -19,6 +19,7 @@ async function sendEmail(to: string, subject: string, text: string) {
 }
 
 async function logEscalationOnce(input: {
+  tenantId: string;
   uniqueKey: string;
   ruleId: string;
   recipientUserId: string;
@@ -36,6 +37,7 @@ async function logEscalationOnce(input: {
 
   await prisma.escalationEvent.create({
     data: {
+      tenantId: input.tenantId,
       uniqueKey: input.uniqueKey,
       ruleId: input.ruleId,
       recipientUserId: input.recipientUserId,
@@ -50,14 +52,22 @@ async function logEscalationOnce(input: {
   return true;
 }
 
-async function notify(userId: string, type: string, title: string, message: string, channel = NotificationChannel.IN_APP, metadata?: unknown) {
+async function notify(
+  tenantId: string,
+  userId: string,
+  type: string,
+  title: string,
+  message: string,
+  channel = NotificationChannel.IN_APP,
+  metadata?: unknown
+) {
   await prisma.notification.create({
-    data: { userId, type, title, message, channel, metadata: metadata as any }
+    data: { tenantId, userId, type, title, message, channel, metadata: metadata as any }
   });
 }
 
-async function handleGoalNotSubmitted(ruleId: string, triggerType: string, daysThreshold: number, cycleId: string, cycleName: string) {
-  const cycle = await prisma.cycle.findUnique({ where: { id: cycleId } });
+async function handleGoalNotSubmitted(tenantId: string, ruleId: string, triggerType: string, daysThreshold: number, cycleId: string, cycleName: string) {
+  const cycle = await prisma.cycle.findFirst({ where: { tenantId, id: cycleId } });
   if (!cycle) return;
 
   const daysSinceOpen = Math.floor((Date.now() - cycle.goalSettingOpen.getTime()) / (1000 * 60 * 60 * 24));
@@ -65,7 +75,7 @@ async function handleGoalNotSubmitted(ruleId: string, triggerType: string, daysT
     return;
   }
 
-  const employees = await prisma.user.findMany({ where: { role: 'EMPLOYEE' } });
+  const employees = await prisma.user.findMany({ where: { tenantId, role: 'EMPLOYEE' } });
   for (const employee of employees) {
     const submitted = await prisma.goal.count({
       where: {
@@ -79,6 +89,7 @@ async function handleGoalNotSubmitted(ruleId: string, triggerType: string, daysT
     const uniqueKey = `${ruleId}:${employee.id}:GOAL_NOT_SUBMITTED:ESCALATED`;
     const created = await logEscalationOnce({
       uniqueKey,
+      tenantId,
       ruleId,
       recipientUserId: employee.id,
       cycleId,
@@ -89,13 +100,14 @@ async function handleGoalNotSubmitted(ruleId: string, triggerType: string, daysT
     });
     if (!created) continue;
 
-    await notify(employee.id, 'ESCALATION_GOAL_NOT_SUBMITTED', 'Goals not submitted', `You have not submitted goals for ${cycleName}.`);
+    await notify(tenantId, employee.id, 'ESCALATION_GOAL_NOT_SUBMITTED', 'Goals not submitted', `You have not submitted goals for ${cycleName}.`);
     await sendEmail(employee.email, 'Action required: submit your goals', `Please submit your goals for ${cycleName}.`);
 
     if (employee.managerId) {
       const manager = await prisma.user.findUnique({ where: { id: employee.managerId } });
       if (manager) {
         await notify(
+          tenantId,
           manager.id,
           'ESCALATION_GOAL_NOT_SUBMITTED',
           `${employee.name} has not submitted goals`,
@@ -106,12 +118,12 @@ async function handleGoalNotSubmitted(ruleId: string, triggerType: string, daysT
   }
 }
 
-async function handleApprovalPending(ruleId: string, triggerType: string, daysThreshold: number, cycleId: string) {
+async function handleApprovalPending(tenantId: string, ruleId: string, triggerType: string, daysThreshold: number, cycleId: string) {
   const thresholdDate = new Date();
   thresholdDate.setDate(thresholdDate.getDate() - daysThreshold);
 
   const pendingGoals = await prisma.goal.findMany({
-    where: { cycleId, status: 'SUBMITTED', updatedAt: { lte: thresholdDate } },
+    where: { tenantId, cycleId, status: 'SUBMITTED', updatedAt: { lte: thresholdDate } },
     include: { user: true }
   });
 
@@ -123,6 +135,7 @@ async function handleApprovalPending(ruleId: string, triggerType: string, daysTh
     const uniqueKey = `${ruleId}:${goal.id}:APPROVAL_PENDING:ESCALATED`;
     const created = await logEscalationOnce({
       uniqueKey,
+      tenantId,
       ruleId,
       recipientUserId: manager.id,
       cycleId,
@@ -134,6 +147,7 @@ async function handleApprovalPending(ruleId: string, triggerType: string, daysTh
     if (!created) continue;
 
     await notify(
+      tenantId,
       manager.id,
       'ESCALATION_APPROVAL_PENDING',
       'Goals awaiting approval',
@@ -143,13 +157,13 @@ async function handleApprovalPending(ruleId: string, triggerType: string, daysTh
   }
 }
 
-async function handleCheckinMissing(ruleId: string, triggerType: string, cycleId: string) {
-  const cycle = await prisma.cycle.findUnique({ where: { id: cycleId } });
+async function handleCheckinMissing(tenantId: string, ruleId: string, triggerType: string, cycleId: string) {
+  const cycle = await prisma.cycle.findFirst({ where: { tenantId, id: cycleId } });
   if (!cycle) return;
 
   const status = cycleStatus(cycle);
   const quarterEntries = Object.entries(status.checkIns) as Array<[Quarter, typeof status.checkIns.Q1]>;
-  const employees = await prisma.user.findMany({ where: { role: 'EMPLOYEE' } });
+  const employees = await prisma.user.findMany({ where: { tenantId, role: 'EMPLOYEE' } });
 
   for (const [quarter, window] of quarterEntries) {
     const daysRemaining = Math.ceil((window.closesAt.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
@@ -168,6 +182,7 @@ async function handleCheckinMissing(ruleId: string, triggerType: string, cycleId
         const uniqueKey = `${ruleId}:${employee.id}:${quarter}:NUDGE`;
         const created = await logEscalationOnce({
           uniqueKey,
+          tenantId,
           ruleId,
           recipientUserId: employee.id,
           cycleId,
@@ -180,6 +195,7 @@ async function handleCheckinMissing(ruleId: string, triggerType: string, cycleId
         if (!created) continue;
 
         await notify(
+          tenantId,
           employee.id,
           'ESCALATION_CHECKIN_NUDGE',
           `${quarter} check-in due soon`,
@@ -196,6 +212,7 @@ async function handleCheckinMissing(ruleId: string, triggerType: string, cycleId
         if (!managerId) continue;
         const created = await logEscalationOnce({
           uniqueKey,
+          tenantId,
           ruleId,
           recipientUserId: managerId,
           cycleId,
@@ -210,6 +227,7 @@ async function handleCheckinMissing(ruleId: string, triggerType: string, cycleId
         const manager = await prisma.user.findUnique({ where: { id: managerId } });
         if (!manager) continue;
         await notify(
+          tenantId,
           manager.id,
           'ESCALATION_CHECKIN_MISSING',
           `${employee.name} missed ${quarter} check-in`,
@@ -223,23 +241,28 @@ async function handleCheckinMissing(ruleId: string, triggerType: string, cycleId
   }
 }
 
-export async function runEscalationCheck() {
+export async function runEscalationCheck(tenantId?: string) {
   console.log('[Escalation] Running check...');
-  const rules = await prisma.escalationRule.findMany({ where: { isActive: true } });
-  const cycle = await prisma.cycle.findFirst({ where: { isActive: true } });
-  if (!cycle) return;
+  const cycles = await prisma.cycle.findMany({
+    where: { ...(tenantId ? { tenantId } : {}), isActive: true },
+    orderBy: { startDate: 'desc' }
+  });
 
-  for (const rule of rules) {
-    if (rule.triggerType === 'GOAL_NOT_SUBMITTED') {
-      await handleGoalNotSubmitted(rule.id, rule.triggerType, rule.daysThreshold, cycle.id, cycle.name);
-    }
+  for (const cycle of cycles) {
+    const rules = await prisma.escalationRule.findMany({ where: { tenantId: cycle.tenantId, isActive: true } });
 
-    if (rule.triggerType === 'APPROVAL_PENDING') {
-      await handleApprovalPending(rule.id, rule.triggerType, rule.daysThreshold, cycle.id);
-    }
+    for (const rule of rules) {
+      if (rule.triggerType === 'GOAL_NOT_SUBMITTED') {
+        await handleGoalNotSubmitted(cycle.tenantId, rule.id, rule.triggerType, rule.daysThreshold, cycle.id, cycle.name);
+      }
 
-    if (rule.triggerType === 'CHECKIN_MISSING') {
-      await handleCheckinMissing(rule.id, rule.triggerType, cycle.id);
+      if (rule.triggerType === 'APPROVAL_PENDING') {
+        await handleApprovalPending(cycle.tenantId, rule.id, rule.triggerType, rule.daysThreshold, cycle.id);
+      }
+
+      if (rule.triggerType === 'CHECKIN_MISSING') {
+        await handleCheckinMissing(cycle.tenantId, rule.id, rule.triggerType, cycle.id);
+      }
     }
   }
 
@@ -247,6 +270,8 @@ export async function runEscalationCheck() {
 }
 
 export function startEscalationJob() {
-  cron.schedule('0 */6 * * *', runEscalationCheck);
+  cron.schedule('0 */6 * * *', () => {
+    void runEscalationCheck();
+  });
   console.log('[Escalation] Job registered (every 6h)');
 }

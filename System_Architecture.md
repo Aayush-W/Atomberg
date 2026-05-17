@@ -1,9 +1,9 @@
 # GoalForge - System Architecture Document
 
-## 1. Executive Summary
-GoalForge (AutoYield AI) is an intelligent, multi-tiered goal-setting and performance tracking platform designed for the AtomQuest Hackathon. It enables organizations to cascade goals, enforce strict quarterly check-in windows, and leverage Machine Learning for sentiment and quality analysis.
+## 1. Executive Summary & The Noble Idea
+**The Noble Idea**: GoalForge aims to democratize organizational growth by transitioning goal-tracking from a reactive HR mandate to a proactive, intelligent ecosystem. By automatically syncing cascading goals and evaluating manager sentiment via ML, it prevents employee burnout and perfectly aligns individual tasks with corporate strategy.
 
-The system is built using a modern microservice-oriented architecture, Containerized via Docker, and structured into three primary tiers: Presentation (Frontend), Application (Backend API + ML Service), and Data (PostgreSQL).
+GoalForge is built using a modern microservice-oriented architecture, Containerized via Docker, and structured into three primary tiers: Presentation (Frontend), Application (Backend API + ML Service), and Data (PostgreSQL).
 
 ---
 

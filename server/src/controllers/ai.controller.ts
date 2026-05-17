@@ -4,6 +4,8 @@ import * as aiSvc from '../services/ai.service';
 import { prisma } from '../lib/prisma';
 import { currentUser } from './_helpers';
 import { forbidden } from '../utils/errors';
+import { buildCalibrationCopilot, buildNarrativeInputs } from '../services/decisionIntelligence.service';
+import { emitDomainEvent } from '../services/domainEvent.service';
 
 const AI_UNAVAILABLE = { error: { code: 'AI_UNAVAILABLE', message: 'AI service temporarily unavailable. Please try again later.' } };
 
@@ -56,8 +58,9 @@ export const conversationalCheckin = async (req: Request, res: Response, next: N
 export const goalSummary = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { employeeId } = req.body;
+    const user = currentUser(req);
     const goals = await prisma.goal.findMany({
-      where: { userId: employeeId },
+      where: { tenantId: user.tenantId, userId: employeeId },
       include: { checkIns: true },
     });
     const result = await aiSvc.goalSummary({ goals });
@@ -94,6 +97,7 @@ export const performanceReviewDraft = async (req: Request, res: Response, next: 
     const employee = await prisma.user.findUnique({
       where: { id: employeeId },
       include: {
+        tenant: true,
         manager: { select: { id: true, name: true } },
         goals: {
           include: {
@@ -116,6 +120,9 @@ export const performanceReviewDraft = async (req: Request, res: Response, next: 
 
     if (!employee) {
       return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Employee not found' } });
+    }
+    if (employee.tenantId !== user.tenantId) {
+      throw forbidden('Employee is outside your tenant');
     }
 
     if (user.role === Role.MANAGER && employee.managerId !== user.id) {
@@ -165,6 +172,19 @@ export const performanceReviewDraft = async (req: Request, res: Response, next: 
       }))
     });
 
+    await emitDomainEvent({
+      tenantId: user.tenantId,
+      eventName: 'review.generated',
+      aggregateType: 'user',
+      aggregateId: employee.id,
+      payload: {
+        employeeId: employee.id,
+        employeeName: employee.name,
+        managerId: employee.managerId,
+        highlights: result.highlights
+      }
+    });
+
     res.json({
       employee: {
         id: employee.id,
@@ -173,6 +193,32 @@ export const performanceReviewDraft = async (req: Request, res: Response, next: 
       },
       ...result
     });
+  } catch (err: any) {
+    if (err?.status === 529 || err?.message?.includes('timeout')) return res.status(503).json(AI_UNAVAILABLE);
+    next(err);
+  }
+};
+
+export const calibrationCopilot = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const user = currentUser(req);
+    const managerId =
+      user.role === Role.MANAGER && !req.query.managerId ? user.id : (req.query.managerId as string | undefined);
+    const result = await buildCalibrationCopilot(user.tenantId, managerId);
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const narrativeIntelligence = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const user = currentUser(req);
+    const managerId =
+      user.role === Role.MANAGER && !req.query.managerId ? user.id : (req.query.managerId as string | undefined);
+    const inputs = await buildNarrativeInputs(user.tenantId, managerId);
+    const result = await aiSvc.narrativeIntelligence(inputs);
+    res.json({ ...inputs, ...result });
   } catch (err: any) {
     if (err?.status === 529 || err?.message?.includes('timeout')) return res.status(503).json(AI_UNAVAILABLE);
     next(err);

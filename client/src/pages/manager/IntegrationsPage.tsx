@@ -1,19 +1,44 @@
 import { FormEvent, useMemo, useState } from 'react';
-import { useMutation, useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { PageHeader, Spinner } from '@/components/common';
 import { goalsService, integrationsService } from '@/services/services';
+import { useAuthStore } from '@/stores/authStore';
 
 const WEBHOOK_SECRET = 'goalforge-demo-secret';
 
 export default function IntegrationsPage() {
+  const user = useAuthStore((s) => s.user);
+  const qc = useQueryClient();
   const { data: goals = [], isLoading } = useQuery({ queryKey: ['integration-goals'], queryFn: goalsService.getTeam });
+  const { data: webhooks = [] } = useQuery({
+    queryKey: ['webhooks'],
+    queryFn: integrationsService.getWebhooks,
+    enabled: user?.role === 'ADMIN'
+  });
+  const { data: deliveries = [] } = useQuery({
+    queryKey: ['webhook-deliveries'],
+    queryFn: integrationsService.getWebhookDeliveries,
+    enabled: user?.role === 'ADMIN'
+  });
+  const { data: flags = [] } = useQuery({
+    queryKey: ['feature-flags'],
+    queryFn: integrationsService.getFeatureFlags,
+    enabled: user?.role === 'ADMIN'
+  });
+
   const [provider, setProvider] = useState<'jira' | 'github'>('jira');
   const [goalId, setGoalId] = useState('');
   const [incrementBy, setIncrementBy] = useState(1);
   const [actualValue, setActualValue] = useState('');
   const [eventTitle, setEventTitle] = useState('');
   const [note, setNote] = useState('');
+  const [webhookForm, setWebhookForm] = useState({
+    name: 'Workday Sync',
+    url: 'https://example.com/webhooks/goalforge',
+    secret: 'demo-webhook-secret',
+    subscribedEvents: 'goal.created,goal.updated,checkin.updated,review.generated,risk.detected'
+  });
 
   const selectedGoal = useMemo(() => goals.find((goal) => goal.id === goalId), [goals, goalId]);
   const webhookPath = `/api/integrations/webhooks/${provider}`;
@@ -35,9 +60,43 @@ export default function IntegrationsPage() {
     }
   });
 
+  const createWebhookMut = useMutation({
+    mutationFn: () =>
+      integrationsService.createWebhook({
+        name: webhookForm.name,
+        url: webhookForm.url,
+        secret: webhookForm.secret,
+        subscribedEvents: webhookForm.subscribedEvents.split(',').map((value) => value.trim()).filter(Boolean)
+      }),
+    onSuccess: () => {
+      toast.success('Webhook endpoint created');
+      qc.invalidateQueries({ queryKey: ['webhooks'] });
+    },
+    onError: (error: any) => toast.error(error?.response?.data?.error?.message ?? 'Failed to create webhook endpoint')
+  });
+
+  const testWebhookMut = useMutation({
+    mutationFn: (id: string) => integrationsService.testWebhook(id),
+    onSuccess: () => {
+      toast.success('Test event queued for webhook endpoint');
+      qc.invalidateQueries({ queryKey: ['webhook-deliveries'] });
+    }
+  });
+
+  const featureFlagMut = useMutation({
+    mutationFn: ({ key, enabled, description, metadata }: { key: string; enabled: boolean; description?: string; metadata?: Record<string, unknown> }) =>
+      integrationsService.updateFeatureFlag(key, enabled, description, metadata),
+    onSuccess: () => {
+      toast.success('Feature flag updated');
+      qc.invalidateQueries({ queryKey: ['feature-flags'] });
+    }
+  });
+
   const exampleCurl = `curl -X POST "${webhookPath}" \\
   -H "Content-Type: application/json" \\
+  -H "x-goalforge-tenant: ${user?.tenantSlug ?? 'demo-tenant'}" \\
   -H "x-goalforge-webhook-secret: ${WEBHOOK_SECRET}" \\
+  -H "Idempotency-Key: integration-demo-001" \\
   -d '{"goalId":"${goalId || '<goal-id>'}","incrementBy":1,"eventTitle":"${provider === 'jira' ? 'Ticket moved to Done' : 'PR merged'}"}'`;
 
   const submit = (event: FormEvent) => {
@@ -55,7 +114,7 @@ export default function IntegrationsPage() {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <PageHeader title="Zero-Click Integrations" subtitle="Simulate Jira and GitHub webhooks that update goals without manual check-ins" />
+      <PageHeader title="Enterprise Integrations" subtitle="Zero-click work sync, versioned webhook contracts, delivery tracking, and feature-controlled rollout" />
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1.05fr,0.95fr]">
         <form onSubmit={submit} className="card space-y-4 p-5">
@@ -110,10 +169,10 @@ export default function IntegrationsPage() {
         <div className="space-y-6">
           <div className="card p-5">
             <h2 className="font-semibold text-slate-800 dark:text-white">Webhook Contract</h2>
-            <p className="mt-2 text-sm text-slate-400">Use this endpoint from Jira or GitHub automation rules to silently update goal progress whenever work is completed.</p>
+            <p className="mt-2 text-sm text-slate-400">Use the versioned webhook endpoint with a shared secret and idempotency key so external automations can replay safely.</p>
             <div className="mt-4 rounded-2xl bg-surface-950 p-4 text-xs text-slate-300">
               <p className="font-semibold text-brand-300">POST {webhookPath}</p>
-              <p className="mt-2">Header: <code>x-goalforge-webhook-secret: {WEBHOOK_SECRET}</code></p>
+              <p className="mt-2">Headers: <code>x-goalforge-webhook-secret</code>, <code>Idempotency-Key</code>, <code>x-request-id</code></p>
               <p className="mt-1">Body fields: <code>goalId</code>, <code>incrementBy</code>, <code>actualValue</code>, <code>eventTitle</code>, <code>note</code>, <code>quarter</code></p>
             </div>
           </div>
@@ -122,17 +181,86 @@ export default function IntegrationsPage() {
             <h2 className="font-semibold text-slate-800 dark:text-white">Example cURL</h2>
             <pre className="mt-3 overflow-x-auto rounded-2xl bg-surface-950 p-4 text-xs text-slate-300 whitespace-pre-wrap">{exampleCurl}</pre>
           </div>
+        </div>
+      </div>
+
+      {user?.role === 'ADMIN' ? (
+        <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+          <div className="card p-5">
+            <h2 className="font-semibold text-slate-800 dark:text-white">Webhook Endpoints</h2>
+            <div className="mt-4 space-y-3">
+              <input className="input" value={webhookForm.name} onChange={(e) => setWebhookForm((prev) => ({ ...prev, name: e.target.value }))} placeholder="Endpoint name" />
+              <input className="input" value={webhookForm.url} onChange={(e) => setWebhookForm((prev) => ({ ...prev, url: e.target.value }))} placeholder="Endpoint URL" />
+              <input className="input" value={webhookForm.secret} onChange={(e) => setWebhookForm((prev) => ({ ...prev, secret: e.target.value }))} placeholder="Signing secret" />
+              <input className="input" value={webhookForm.subscribedEvents} onChange={(e) => setWebhookForm((prev) => ({ ...prev, subscribedEvents: e.target.value }))} placeholder="Comma-separated events" />
+              <button className="btn btn-primary" onClick={() => createWebhookMut.mutate()} disabled={createWebhookMut.isPending}>
+                {createWebhookMut.isPending ? 'Creating...' : 'Create Webhook Endpoint'}
+              </button>
+            </div>
+            <div className="mt-5 space-y-3">
+              {webhooks.map((endpoint) => (
+                <div key={endpoint.id} className="rounded-xl border border-surface-200 p-3 dark:border-surface-800">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="font-semibold text-slate-800 dark:text-white">{endpoint.name}</p>
+                      <p className="text-xs text-slate-400">{endpoint.url}</p>
+                    </div>
+                    <button className="btn btn-secondary btn-sm" onClick={() => testWebhookMut.mutate(endpoint.id)}>
+                      Send Test
+                    </button>
+                  </div>
+                  <p className="mt-2 text-xs text-slate-400">Failures: {endpoint.failureCount} · Active: {String(endpoint.isActive)}</p>
+                </div>
+              ))}
+            </div>
+          </div>
 
           <div className="card p-5">
-            <h2 className="font-semibold text-slate-800 dark:text-white">Why It Matters</h2>
-            <div className="mt-3 space-y-3 text-sm text-slate-400">
-              <p>Jira ticket transitions can increment engineering throughput goals automatically.</p>
-              <p>GitHub merge events can update delivery goals with no extra employee clicks.</p>
-              <p>Every sync writes to the audit trail, so the automation is visible and reviewable.</p>
+            <h2 className="font-semibold text-slate-800 dark:text-white">Feature Flags</h2>
+            <div className="mt-4 space-y-3">
+              {flags.map((flag) => (
+                <div key={flag.id} className="flex items-center justify-between rounded-xl border border-surface-200 p-3 dark:border-surface-800">
+                  <div>
+                    <p className="font-semibold text-slate-800 dark:text-white">{flag.key}</p>
+                    <p className="text-xs text-slate-400">{flag.description}</p>
+                  </div>
+                  <button className={`btn ${flag.enabled ? 'btn-secondary' : 'btn-primary'}`} onClick={() => featureFlagMut.mutate({ key: flag.key, enabled: !flag.enabled, description: flag.description ?? undefined, metadata: flag.metadata })}>
+                    {flag.enabled ? 'Disable' : 'Enable'}
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="card p-5 xl:col-span-2">
+            <h2 className="font-semibold text-slate-800 dark:text-white">Recent Webhook Deliveries</h2>
+            <div className="mt-4 table-container rounded-none border-0">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Endpoint</th>
+                    <th>Event</th>
+                    <th>Status</th>
+                    <th>Attempts</th>
+                    <th>Response</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {deliveries.slice(0, 12).map((delivery) => (
+                    <tr key={delivery.id}>
+                      <td className="text-xs text-slate-400">{delivery.endpoint?.name ?? 'Endpoint'}</td>
+                      <td className="text-xs text-slate-400">{delivery.eventName}</td>
+                      <td className="text-xs text-slate-400">{delivery.status}</td>
+                      <td className="text-xs text-slate-400">{delivery.attemptCount}</td>
+                      <td className="text-xs text-slate-400">{delivery.statusCode ?? 'n/a'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           </div>
         </div>
-      </div>
+      ) : null}
     </div>
   );
 }

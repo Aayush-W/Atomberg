@@ -7,7 +7,7 @@ const prisma_1 = require("../lib/prisma");
 const getNotifications = async (req, res, next) => {
     try {
         const notifications = await prisma_1.prisma.notification.findMany({
-            where: { userId: req.user.id },
+            where: { tenantId: req.user.tenantId, userId: req.user.id },
             orderBy: { createdAt: 'desc' },
             take: 50,
         });
@@ -20,10 +20,14 @@ const getNotifications = async (req, res, next) => {
 exports.getNotifications = getNotifications;
 const markRead = async (req, res, next) => {
     try {
-        const n = await prisma_1.prisma.notification.update({
-            where: { id: req.params.id },
+        const n = await prisma_1.prisma.notification.updateMany({
+            where: { id: req.params.id, tenantId: req.user.tenantId, userId: req.user.id },
             data: { isRead: true },
         });
+        if (n.count === 0) {
+            res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Notification not found' } });
+            return;
+        }
         res.json(n);
     }
     catch (err) {
@@ -34,7 +38,7 @@ exports.markRead = markRead;
 const markAllRead = async (req, res, next) => {
     try {
         await prisma_1.prisma.notification.updateMany({
-            where: { userId: req.user.id, isRead: false },
+            where: { tenantId: req.user.tenantId, userId: req.user.id, isRead: false },
             data: { isRead: true },
         });
         res.json({ ok: true });
@@ -45,6 +49,24 @@ const markAllRead = async (req, res, next) => {
 };
 exports.markAllRead = markAllRead;
 // Helper: create a notification
-async function createNotification(userId, type, title, message, channel = client_1.NotificationChannel.IN_APP, metadata) {
-    return prisma_1.prisma.notification.create({ data: { userId, type, title, message, channel, metadata: metadata } });
+async function createNotification(userId, type, title, message, channel = client_1.NotificationChannel.IN_APP, metadata, tenantId) {
+    const resolvedTenantId = tenantId ??
+        (await prisma_1.prisma.user.findUnique({
+            where: { id: userId },
+            select: { tenantId: true }
+        }))?.tenantId;
+    if (!resolvedTenantId) {
+        throw new Error('Unable to resolve tenant for notification');
+    }
+    return prisma_1.prisma.notification.create({
+        data: {
+            tenantId: resolvedTenantId,
+            userId,
+            type,
+            title,
+            message,
+            channel,
+            metadata: metadata
+        }
+    });
 }

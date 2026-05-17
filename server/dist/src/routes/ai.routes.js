@@ -13,3 +13,5 @@ exports.aiRouter.post('/conversational-checkin', ai_controller_1.conversationalC
 exports.aiRouter.post('/goal-summary', ai_controller_1.goalSummary);
 exports.aiRouter.post('/goal-autopilot', ai_controller_1.goalAutopilot);
 exports.aiRouter.post('/performance-review', ai_controller_1.performanceReviewDraft);
+exports.aiRouter.get('/calibration-copilot', ai_controller_1.calibrationCopilot);
+exports.aiRouter.get('/narrative-intelligence', ai_controller_1.narrativeIntelligence);

@@ -10,6 +10,7 @@ const prisma_1 = require("../lib/prisma");
 const asyncHandler_1 = require("../utils/asyncHandler");
 const errors_1 = require("../utils/errors");
 const auth_1 = require("../utils/auth");
+const tenant_1 = require("../utils/tenant");
 function assertAuthenticated(req) {
     if (!req.user) {
         throw (0, errors_1.unauthorized)();
@@ -39,16 +40,23 @@ function limitUpdateForNonAdmin(req, targetUserId, input) {
     return input;
 }
 function sanitizeUsers(users) {
-    return users.map(auth_1.toPublicUser);
+    return users.map((user) => (0, auth_1.toPublicUser)(user));
 }
 exports.listUsers = (0, asyncHandler_1.asyncHandler)(async (_req, res) => {
+    const authUser = assertAuthenticated(_req);
     const users = await prisma_1.prisma.user.findMany({
+        where: (0, tenant_1.tenantUserScope)(authUser),
+        include: { tenant: true },
         orderBy: [{ role: 'asc' }, { name: 'asc' }]
     });
     res.json({ users: sanitizeUsers(users) });
 });
 exports.getUser = (0, asyncHandler_1.asyncHandler)(async (req, res) => {
-    const user = await prisma_1.prisma.user.findUnique({ where: { id: req.params.id } });
+    const authUser = assertAuthenticated(req);
+    const user = await prisma_1.prisma.user.findFirst({
+        where: (0, tenant_1.tenantUserScope)(authUser, { id: req.params.id }),
+        include: { tenant: true }
+    });
     if (!user) {
         res.status(404).json({ error: { code: 'NOT_FOUND', message: 'User not found' } });
         return;
@@ -62,22 +70,27 @@ exports.getTeam = (0, asyncHandler_1.asyncHandler)(async (req, res) => {
         throw (0, errors_1.forbidden)('Managers can only view their own team');
     }
     const users = await prisma_1.prisma.user.findMany({
-        where: { managerId: req.params.managerId },
+        where: (0, tenant_1.tenantUserScope)(authUser, { managerId: req.params.managerId }),
+        include: { tenant: true },
         orderBy: { name: 'asc' }
     });
     res.json({ users: sanitizeUsers(users) });
 });
-exports.listManagers = (0, asyncHandler_1.asyncHandler)(async (_req, res) => {
+exports.listManagers = (0, asyncHandler_1.asyncHandler)(async (req, res) => {
+    const authUser = assertAuthenticated(req);
     const users = await prisma_1.prisma.user.findMany({
-        where: { role: client_1.Role.MANAGER },
+        where: (0, tenant_1.tenantUserScope)(authUser, { role: client_1.Role.MANAGER }),
+        include: { tenant: true },
         orderBy: { name: 'asc' }
     });
     res.json({ users: sanitizeUsers(users) });
 });
 exports.createUser = (0, asyncHandler_1.asyncHandler)(async (req, res) => {
+    const authUser = assertAuthenticated(req);
     const hashedPassword = await bcrypt_1.default.hash(req.body.password, 10);
     const user = await prisma_1.prisma.user.create({
         data: {
+            tenantId: authUser.tenantId,
             name: req.body.name,
             email: req.body.email,
             password: hashedPassword,
@@ -85,12 +98,21 @@ exports.createUser = (0, asyncHandler_1.asyncHandler)(async (req, res) => {
             department: req.body.department,
             jobTitle: req.body.jobTitle,
             managerId: req.body.managerId ?? null
-        }
+        },
+        include: { tenant: true }
     });
     res.status(201).json({ user: (0, auth_1.toPublicUser)(user) });
 });
 exports.updateUser = (0, asyncHandler_1.asyncHandler)(async (req, res) => {
+    const authUser = assertAuthenticated(req);
     const input = limitUpdateForNonAdmin(req, req.params.id, req.body);
+    const existing = await prisma_1.prisma.user.findFirst({
+        where: (0, tenant_1.tenantUserScope)(authUser, { id: req.params.id })
+    });
+    if (!existing) {
+        res.status(404).json({ error: { code: 'NOT_FOUND', message: 'User not found' } });
+        return;
+    }
     const data = {};
     if (input.name !== undefined)
         data.name = input.name;
@@ -108,7 +130,8 @@ exports.updateUser = (0, asyncHandler_1.asyncHandler)(async (req, res) => {
         data.password = await bcrypt_1.default.hash(input.password, 10);
     const user = await prisma_1.prisma.user.update({
         where: { id: req.params.id },
-        data
+        data,
+        include: { tenant: true }
     });
     res.json({ user: (0, auth_1.toPublicUser)(user) });
 });

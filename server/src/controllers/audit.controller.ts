@@ -1,11 +1,14 @@
 import { Request, Response, NextFunction } from 'express';
 import { prisma } from '../lib/prisma';
+import { currentUser } from './_helpers';
 
 export const getAuditLog = async (req: Request, res: Response, next: NextFunction) => {
   try {
+    const user = currentUser(req);
     const { userId, goalId, from, to, limit = '100' } = req.query as Record<string, string>;
     const logs = await prisma.auditLog.findMany({
       where: {
+        tenantId: user.tenantId,
         ...(userId && { userId }),
         ...(goalId && { goalId }),
         ...(from || to ? {
@@ -25,8 +28,9 @@ export const getAuditLog = async (req: Request, res: Response, next: NextFunctio
 
 export const getAuditForGoal = async (req: Request, res: Response, next: NextFunction) => {
   try {
+    const user = currentUser(req);
     const logs = await prisma.auditLog.findMany({
-      where: { goalId: req.params.goalId },
+      where: { tenantId: user.tenantId, goalId: req.params.goalId },
       include: { user: { select: { id: true, name: true, email: true, role: true } } },
       orderBy: { timestamp: 'desc' },
     });

@@ -13,9 +13,10 @@ export const listKudos = asyncHandler(async (req: Request, res: Response) => {
   const where =
     user.role === Role.ADMIN
       ? receiverId
-        ? { receiverId }
-        : {}
+        ? { tenantId: user.tenantId, receiverId }
+        : { tenantId: user.tenantId }
       : {
+          tenantId: user.tenantId,
           OR: [{ receiverId: receiverId ?? user.id }, { senderId: user.id }]
         };
 
@@ -39,13 +40,13 @@ export const createKudos = asyncHandler(async (req: Request<unknown, unknown, Cr
     throw badRequest('You cannot award kudos to yourself');
   }
 
-  const receiver = await prisma.user.findUnique({ where: { id: req.body.receiverId } });
+  const receiver = await prisma.user.findFirst({ where: { tenantId: user.tenantId, id: req.body.receiverId } });
   if (!receiver) {
     throw badRequest('Receiver not found');
   }
 
   if (req.body.goalId) {
-    const goal = await prisma.goal.findUnique({ where: { id: req.body.goalId } });
+    const goal = await prisma.goal.findFirst({ where: { tenantId: user.tenantId, id: req.body.goalId } });
     if (!goal) {
       throw badRequest('Linked goal not found');
     }
@@ -56,6 +57,7 @@ export const createKudos = asyncHandler(async (req: Request<unknown, unknown, Cr
 
   const kudos = await prisma.kudos.create({
     data: {
+      tenantId: user.tenantId,
       senderId: user.id,
       receiverId: req.body.receiverId,
       goalId: req.body.goalId,
@@ -75,7 +77,8 @@ export const createKudos = asyncHandler(async (req: Request<unknown, unknown, Cr
     `New ${req.body.badgeType.toLowerCase().replace(/_/g, ' ')} kudos`,
     `${user.name} recognized you for "${req.body.note}"`,
     undefined,
-    { kudosId: kudos.id, goalId: req.body.goalId ?? null }
+    { kudosId: kudos.id, goalId: req.body.goalId ?? null },
+    user.tenantId
   );
 
   res.status(201).json({ kudos });

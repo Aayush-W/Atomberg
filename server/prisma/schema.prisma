@@ -84,8 +84,37 @@ enum EscalationPhase {
   ESCALATED
 }
 
+model Tenant {
+  id                String              @id @default(uuid())
+  name              String
+  slug              String              @unique
+  webhookSecret     String
+  branding          Json?
+  users             User[]
+  cycles            Cycle[]
+  goals             Goal[]
+  goalDependencies  GoalDependency[]
+  checkIns          CheckIn[]
+  auditLogs         AuditLog[]
+  escalationRules   EscalationRule[]
+  notifications     Notification[]
+  delegations       ApprovalDelegation[]
+  kudos             Kudos[]
+  conflictAlerts    GoalConflictAlert[]
+  escalationEvents  EscalationEvent[]
+  domainEvents      DomainEvent[]
+  webhookEndpoints  WebhookEndpoint[]
+  webhookDeliveries WebhookDelivery[]
+  apiKeys           ApiIdempotencyKey[]
+  featureFlags      FeatureFlag[]
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+}
+
 model User {
   id                  String               @id @default(uuid())
+  tenantId            String
+  tenant              Tenant               @relation(fields: [tenantId], references: [id])
   name                String
   email               String               @unique
   password            String
@@ -109,69 +138,81 @@ model User {
   escalationEvents    EscalationEvent[]    @relation("EscalationEventRecipient")
   createdAt           DateTime             @default(now())
   updatedAt           DateTime             @updatedAt
+  @@index([tenantId, role, managerId])
 }
 
 model Cycle {
-  id              String    @id @default(uuid())
-  name            String
-  startDate       DateTime
-  endDate         DateTime
-  isActive        Boolean   @default(true)
-  goalSettingOpen DateTime
-  q1Open          DateTime
-  q2Open          DateTime
-  q3Open          DateTime
-  q4Open          DateTime
-  bypassWindow    Boolean   @default(false)
-  goals           Goal[]
-  conflictAlerts  GoalConflictAlert[]
+  id               String              @id @default(uuid())
+  tenantId         String
+  tenant           Tenant              @relation(fields: [tenantId], references: [id])
+  name             String
+  startDate        DateTime
+  endDate          DateTime
+  isActive         Boolean             @default(true)
+  goalSettingOpen  DateTime
+  q1Open           DateTime
+  q2Open           DateTime
+  q3Open           DateTime
+  q4Open           DateTime
+  bypassWindow     Boolean             @default(false)
+  goals            Goal[]
+  conflictAlerts   GoalConflictAlert[]
   escalationEvents EscalationEvent[]
-  createdAt       DateTime  @default(now())
+  createdAt        DateTime            @default(now())
+  @@index([tenantId, isActive, startDate])
 }
 
 model Goal {
-  id                String             @id @default(uuid())
-  userId            String
-  user              User               @relation(fields: [userId], references: [id])
-  cycleId           String
-  cycle             Cycle              @relation(fields: [cycleId], references: [id])
-  thrustArea        String
-  title             String
-  description       String
-  uomType           UoMType
-  target            Float
-  targetDate        DateTime?
-  weightage         Float
-  sensitivity       GoalSensitivity    @default(NORMAL)
-  status            GoalStatus         @default(DRAFT)
-  isShared          Boolean            @default(false)
-  parentGoalId      String?
-  parentGoal        Goal?              @relation("SharedGoals", fields: [parentGoalId], references: [id])
-  sharedWith        Goal[]             @relation("SharedGoals")
-  qualityScore      Float?
-  qualityFeedback   Json?
-  checkIns          CheckIn[]
-  auditLogs         AuditLog[]
-  kudos             Kudos[]
+  id               String              @id @default(uuid())
+  tenantId         String
+  tenant           Tenant              @relation(fields: [tenantId], references: [id])
+  userId           String
+  user             User                @relation(fields: [userId], references: [id])
+  cycleId          String
+  cycle            Cycle               @relation(fields: [cycleId], references: [id])
+  thrustArea       String
+  title            String
+  description      String
+  uomType          UoMType
+  target           Float
+  targetDate       DateTime?
+  weightage        Float
+  sensitivity      GoalSensitivity     @default(NORMAL)
+  status           GoalStatus          @default(DRAFT)
+  isShared         Boolean             @default(false)
+  parentGoalId     String?
+  parentGoal       Goal?               @relation("SharedGoals", fields: [parentGoalId], references: [id])
+  sharedWith       Goal[]              @relation("SharedGoals")
+  qualityScore     Float?
+  qualityFeedback  Json?
+  checkIns         CheckIn[]
+  auditLogs        AuditLog[]
+  kudos            Kudos[]
   conflictAlertsA   GoalConflictAlert[] @relation("GoalConflictA")
   conflictAlertsB   GoalConflictAlert[] @relation("GoalConflictB")
-  dependencies    GoalDependency[] @relation("DependentGoal")
-  dependents      GoalDependency[] @relation("RequiredGoal")
-  managerComment  String?
-  lockedAt        DateTime?
-  createdAt       DateTime    @default(now())
-  updatedAt       DateTime    @updatedAt
+  dependencies      GoalDependency[]    @relation("DependentGoal")
+  dependents        GoalDependency[]    @relation("RequiredGoal")
+  managerComment    String?
+  lockedAt          DateTime?
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  @@index([tenantId, userId, cycleId, status])
 }
 
 model GoalDependency {
+  tenantId         String
+  tenant           Tenant  @relation(fields: [tenantId], references: [id])
   id              String  @id @default(uuid())
   dependentGoalId String
   requiredGoalId  String
   dependentGoal   Goal    @relation("DependentGoal", fields: [dependentGoalId], references: [id])
   requiredGoal    Goal    @relation("RequiredGoal", fields: [requiredGoalId], references: [id])
+  @@index([tenantId, dependentGoalId, requiredGoalId])
 }
 
 model CheckIn {
+  tenantId          String
+  tenant            Tenant         @relation(fields: [tenantId], references: [id])
   id               String        @id @default(uuid())
   goalId           String
   goal             Goal          @relation(fields: [goalId], references: [id])
@@ -188,9 +229,12 @@ model CheckIn {
   sentiment        Float?
   createdAt        DateTime      @default(now())
   updatedAt        DateTime      @updatedAt
+  @@index([tenantId, userId, quarter])
 }
 
 model AuditLog {
+  tenantId   String
+  tenant     Tenant   @relation(fields: [tenantId], references: [id])
   id        String   @id @default(uuid())
   goalId    String?
   goal      Goal?    @relation(fields: [goalId], references: [id])
@@ -201,9 +245,12 @@ model AuditLog {
   oldValue  String?
   newValue  String?
   timestamp DateTime @default(now())
+  @@index([tenantId, userId, timestamp])
 }
 
 model EscalationRule {
+  tenantId         String
+  tenant           Tenant            @relation(fields: [tenantId], references: [id])
   id              String            @id @default(uuid())
   name            String
   triggerType     String
@@ -211,9 +258,12 @@ model EscalationRule {
   isActive        Boolean   @default(true)
   escalationChain Json
   events          EscalationEvent[]
+  @@index([tenantId, isActive, triggerType])
 }
 
 model Notification {
+  tenantId   String
+  tenant     Tenant              @relation(fields: [tenantId], references: [id])
   id        String              @id @default(uuid())
   userId    String
   user      User                @relation(fields: [userId], references: [id])
@@ -224,9 +274,12 @@ model Notification {
   metadata  Json?
   isRead    Boolean             @default(false)
   createdAt DateTime            @default(now())
+  @@index([tenantId, userId, createdAt])
 }
 
 model ApprovalDelegation {
+  tenantId            String
+  tenant              Tenant   @relation(fields: [tenantId], references: [id])
   id                 String   @id @default(uuid())
   delegatorManagerId String
   delegateManagerId  String
@@ -238,9 +291,12 @@ model ApprovalDelegation {
   isActive           Boolean  @default(true)
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
+  @@index([tenantId, delegatorManagerId, delegateManagerId])
 }
 
 model Kudos {
+  tenantId   String
+  tenant     Tenant         @relation(fields: [tenantId], references: [id])
   id         String         @id @default(uuid())
   senderId   String
   receiverId String
@@ -251,9 +307,12 @@ model Kudos {
   badgeType  KudosBadgeType
   note       String
   createdAt  DateTime       @default(now())
+  @@index([tenantId, receiverId, createdAt])
 }
 
 model GoalConflictAlert {
+  tenantId    String
+  tenant      Tenant               @relation(fields: [tenantId], references: [id])
   id         String               @id @default(uuid())
   goalAId    String
   goalBId    String
@@ -266,9 +325,12 @@ model GoalConflictAlert {
   goalA      Goal                 @relation("GoalConflictA", fields: [goalAId], references: [id])
   goalB      Goal                 @relation("GoalConflictB", fields: [goalBId], references: [id])
   cycle      Cycle                @relation(fields: [cycleId], references: [id])
+  @@index([tenantId, cycleId, department])
 }
 
 model EscalationEvent {
+  tenantId         String
+  tenant           Tenant          @relation(fields: [tenantId], references: [id])
   id              String          @id @default(uuid())
   uniqueKey       String          @unique
   ruleId          String
@@ -283,4 +345,86 @@ model EscalationEvent {
   rule            EscalationRule  @relation(fields: [ruleId], references: [id])
   recipientUser   User            @relation("EscalationEventRecipient", fields: [recipientUserId], references: [id])
   cycle           Cycle?          @relation(fields: [cycleId], references: [id])
+  @@index([tenantId, recipientUserId, createdAt])
+}
+
+model DomainEvent {
+  tenantId      String
+  tenant        Tenant   @relation(fields: [tenantId], references: [id])
+  id            String   @id @default(uuid())
+  aggregateType String
+  aggregateId   String
+  eventName     String
+  payload       Json
+  correlationId String?
+  status        String   @default("PENDING")
+  publishedAt   DateTime?
+  createdAt     DateTime @default(now())
+  @@index([tenantId, eventName, createdAt])
+}
+
+model WebhookEndpoint {
+  tenantId         String
+  tenant           Tenant            @relation(fields: [tenantId], references: [id])
+  id               String            @id @default(uuid())
+  name             String
+  url              String
+  secret           String
+  subscribedEvents Json
+  isActive         Boolean           @default(true)
+  failureCount     Int               @default(0)
+  lastDeliveredAt  DateTime?
+  createdByUserId  String
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  deliveries       WebhookDelivery[]
+  @@index([tenantId, isActive, createdAt])
+}
+
+model WebhookDelivery {
+  tenantId       String
+  tenant         Tenant          @relation(fields: [tenantId], references: [id])
+  id            String          @id @default(uuid())
+  endpointId    String
+  eventId       String
+  eventName     String
+  status        String          @default("PENDING")
+  statusCode    Int?
+  requestBody   Json
+  responseBody  String?
+  attemptCount  Int             @default(0)
+  nextRetryAt   DateTime?
+  deliveredAt   DateTime?
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+  endpoint      WebhookEndpoint @relation(fields: [endpointId], references: [id])
+  @@index([tenantId, status, createdAt])
+}
+
+model ApiIdempotencyKey {
+  tenantId          String
+  tenant            Tenant   @relation(fields: [tenantId], references: [id])
+  id               String   @id @default(uuid())
+  idempotencyKey   String
+  routeFingerprint String
+  statusCode       Int
+  responseBody     Json
+  createdAt        DateTime @default(now())
+  expiresAt        DateTime
+  @@unique([tenantId, idempotencyKey, routeFingerprint])
+  @@index([tenantId, expiresAt])
+}
+
+model FeatureFlag {
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id])
+  id          String   @id @default(uuid())
+  key         String
+  description String?
+  enabled     Boolean  @default(false)
+  metadata    Json?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  @@unique([tenantId, key])
+  @@index([tenantId, updatedAt])
 }

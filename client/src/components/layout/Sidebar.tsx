@@ -44,7 +44,7 @@ const navItems: NavItem[] = [
   { to: '/admin/audit',            label: 'Audit Log',       icon: <Shield size={18} />,            roles: ['ADMIN'] },
   { to: '/admin/ml-insights',      label: 'ML Insights',     icon: <Brain size={18} />,             roles: ['ADMIN'] },
   { to: '/admin/dependency-graph', label: 'Dependency Graph',icon: <Network size={18} />,           roles: ['ADMIN'] },
-  { to: '/admin/integrations',     label: 'Integrations',    icon: <PlugZap size={18} />,           roles: ['ADMIN'] },
+  { to: '/admin/platform',         label: 'Platform',        icon: <PlugZap size={18} />,           roles: ['ADMIN'] },
 ];
 
 const DEMO_ACCOUNTS = [
@@ -96,9 +96,12 @@ export default function Sidebar() {
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium text-white truncate">{user.name}</p>
-              <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide bg-brand-600/30 text-brand-300">
-                {user.role}
-              </span>
+              <div className="mt-1 flex items-center gap-1.5">
+                <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide bg-brand-600/30 text-brand-300">
+                  {user.role}
+                </span>
+                <span className="text-[10px] uppercase tracking-wide text-slate-500">{user.tenantSlug}</span>
+              </div>
             </div>
           </div>
         )}

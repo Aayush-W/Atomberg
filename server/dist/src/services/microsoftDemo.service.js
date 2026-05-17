@@ -47,6 +47,14 @@ async function syncMicrosoftDemoUser(email) {
     if (!profile) {
         throw new Error('Unknown Microsoft demo profile');
     }
+    const tenant = await prisma_1.prisma.tenant.findFirst({
+        where: {
+            OR: [{ slug: profile.tenantId }, { name: profile.tenantId }]
+        }
+    });
+    if (!tenant) {
+        throw new Error(`Tenant ${profile.tenantId} is not configured`);
+    }
     const manager = profile.managerEmail
         ? await prisma_1.prisma.user.findUnique({ where: { email: profile.managerEmail } })
         : null;
@@ -55,6 +63,7 @@ async function syncMicrosoftDemoUser(email) {
         where: { email: profile.email },
         update: {
             name: profile.name,
+            tenantId: tenant.id,
             department: profile.department,
             jobTitle: profile.jobTitle,
             role: profile.role,
@@ -67,6 +76,7 @@ async function syncMicrosoftDemoUser(email) {
             name: profile.name,
             email: profile.email,
             password,
+            tenantId: tenant.id,
             department: profile.department,
             jobTitle: profile.jobTitle,
             role: profile.role,
@@ -74,7 +84,8 @@ async function syncMicrosoftDemoUser(email) {
             authProvider: client_1.AuthProvider.MICROSOFT_DEMO,
             microsoftEntraId: profile.entraId,
             microsoftTenantId: profile.tenantId
-        }
+        },
+        include: { tenant: true }
     });
     return user;
 }

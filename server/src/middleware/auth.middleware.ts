@@ -26,13 +26,22 @@ export async function requireAuth(req: Request, _res: Response, next: NextFuncti
     }
 
     const payload = verifyAccessToken(token);
-    const user = await prisma.user.findUnique({ where: { id: payload.sub } });
+    const user = await prisma.user.findUnique({
+      where: { id: payload.sub },
+      include: { tenant: true }
+    });
     if (!user) {
       throw unauthorized('User no longer exists');
+    }
+    if (user.tenantId !== payload.tenantId) {
+      throw unauthorized('Tenant mismatch');
     }
 
     req.user = {
       id: user.id,
+      tenantId: user.tenantId,
+      tenantName: user.tenant.name,
+      tenantSlug: user.tenant.slug,
       email: user.email,
       name: user.name,
       role: user.role,

@@ -7,7 +7,9 @@ import {
   conversationalCheckin,
   goalSummary,
   goalAutopilot,
-  performanceReviewDraft
+  performanceReviewDraft,
+  calibrationCopilot,
+  narrativeIntelligence
 } from '../controllers/ai.controller';
 
 export const aiRouter = Router();
@@ -19,3 +21,5 @@ aiRouter.post('/conversational-checkin', conversationalCheckin);
 aiRouter.post('/goal-summary', goalSummary);
 aiRouter.post('/goal-autopilot', goalAutopilot);
 aiRouter.post('/performance-review', performanceReviewDraft);
+aiRouter.get('/calibration-copilot', calibrationCopilot);
+aiRouter.get('/narrative-intelligence', narrativeIntelligence);

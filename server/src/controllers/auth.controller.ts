@@ -21,7 +21,10 @@ function setRefreshCookie(res: Response, refreshToken: string): void {
 }
 
 export const login = asyncHandler(async (req: Request<unknown, unknown, LoginInput>, res: Response) => {
-  const user = await prisma.user.findUnique({ where: { email: req.body.email } });
+  const user = await prisma.user.findUnique({
+    where: { email: req.body.email },
+    include: { tenant: true }
+  });
   if (!user) {
     throw unauthorized('Invalid email or password');
   }
@@ -47,7 +50,10 @@ export const refresh = asyncHandler(async (req: Request<unknown, unknown, Refres
 
   try {
     const payload = verifyRefreshToken(token);
-    const user = await prisma.user.findUnique({ where: { id: payload.sub } });
+    const user = await prisma.user.findUnique({
+      where: { id: payload.sub },
+      include: { tenant: true }
+    });
     if (!user) {
       throw unauthorized('User no longer exists');
     }
@@ -75,7 +81,10 @@ export const me = asyncHandler(async (req: Request, res: Response) => {
     throw unauthorized();
   }
 
-  const user = await prisma.user.findUnique({ where: { id: req.user.id } });
+  const user = await prisma.user.findUnique({
+    where: { id: req.user.id },
+    include: { tenant: true }
+  });
   if (!user) {
     throw unauthorized('User no longer exists');
   }

@@ -9,6 +9,7 @@ import { ensureUserCanAccessGoal, createAuditLog, getActiveCycleOrThrow } from '
 import { cycleStatus } from '../services/cycleRules.service';
 import { calculateSentimentScore } from '../services/sentiment.service';
 import { computeProgress } from '../services/checkinProgress.service';
+import { emitDomainEvent } from '../services/domainEvent.service';
 
 export const createCheckIn = asyncHandler(async (req: Request<unknown, unknown, CreateCheckInInput>, res: Response) => {
   const user = getCurrentUser(req as any);
@@ -26,7 +27,7 @@ export const createCheckIn = asyncHandler(async (req: Request<unknown, unknown, 
     throw forbidden('Employees cannot directly create check-ins for shared child goals');
   }
 
-  const cycle = await getActiveCycleOrThrow(goal.cycleId);
+  const cycle = await getActiveCycleOrThrow(user.tenantId, goal.cycleId);
   const cycleStatusObj = cycleStatus(cycle as any);
   const qStatus = cycleStatusObj.checkIns[req.body.quarter];
   if (!qStatus || !qStatus.isOpen) {
@@ -37,6 +38,7 @@ export const createCheckIn = asyncHandler(async (req: Request<unknown, unknown, 
 
   const checkIn = await prisma.checkIn.create({
     data: {
+      tenantId: goal.tenantId,
       goalId: req.body.goalId,
       userId: user.id,
       quarter: req.body.quarter,
@@ -50,12 +52,26 @@ export const createCheckIn = asyncHandler(async (req: Request<unknown, unknown, 
   });
 
   await createAuditLog({ goalId: goal.id, userId: user.id, action: 'CHECKIN_CREATED' });
+  await emitDomainEvent({
+    tenantId: user.tenantId,
+    eventName: 'checkin.created',
+    aggregateType: 'goal',
+    aggregateId: goal.id,
+    payload: {
+      goalId: goal.id,
+      checkInId: checkIn.id,
+      actorUserId: user.id,
+      progressScore: checkIn.progressScore,
+      quarter: checkIn.quarter
+    }
+  });
 
   if (goal.isShared && goal.parentGoalId === null) {
     const childGoals = await prisma.goal.findMany({ where: { parentGoalId: goal.id } });
     if (childGoals.length > 0) {
       await prisma.checkIn.createMany({
         data: childGoals.map(cg => ({
+          tenantId: goal.tenantId,
           goalId: cg.id,
           userId: cg.userId,
           quarter: req.body.quarter,
@@ -69,6 +85,7 @@ export const createCheckIn = asyncHandler(async (req: Request<unknown, unknown, 
       });
       await prisma.auditLog.createMany({
         data: childGoals.map(cg => ({
+          tenantId: goal.tenantId,
           goalId: cg.id,
           userId: user.id,
           action: 'CHECKIN_SYNCED'
@@ -89,7 +106,7 @@ export const listGoalCheckIns = asyncHandler(async (req: Request<{ goalId: strin
 
   await ensureUserCanAccessGoal(user, goal);
 
-  const checkIns = await prisma.checkIn.findMany({ where: { goalId: goal.id }, orderBy: { createdAt: 'asc' } });
+  const checkIns = await prisma.checkIn.findMany({ where: { tenantId: user.tenantId, goalId: goal.id }, orderBy: { createdAt: 'asc' } });
   res.json({ checkIns });
 });
 
@@ -123,7 +140,7 @@ export const updateCheckIn = asyncHandler(async (req: Request<{ id: string }, un
     throw forbidden('Employees cannot directly update check-ins for shared child goals');
   }
 
-  const cycle = await getActiveCycleOrThrow(goal.cycleId);
+  const cycle = await getActiveCycleOrThrow(user.tenantId, goal.cycleId);
   const cycleStatusObj = cycleStatus(cycle as any);
   const qStatus = cycleStatusObj.checkIns[existing.quarter];
   if (!qStatus || !qStatus.isOpen) {
@@ -157,6 +174,19 @@ export const updateCheckIn = asyncHandler(async (req: Request<{ id: string }, un
 
   const updated = await prisma.checkIn.update({ where: { id: existing.id }, data: toUpdate });
   await createAuditLog({ goalId: goal.id, userId: user.id, action: 'CHECKIN_UPDATED' });
+  await emitDomainEvent({
+    tenantId: user.tenantId,
+    eventName: 'checkin.updated',
+    aggregateType: 'goal',
+    aggregateId: goal.id,
+    payload: {
+      goalId: goal.id,
+      checkInId: updated.id,
+      actorUserId: user.id,
+      progressScore: updated.progressScore,
+      quarter: updated.quarter
+    }
+  });
 
   if (goal.isShared && goal.parentGoalId === null) {
     const childGoals = await prisma.goal.findMany({ where: { parentGoalId: goal.id } });
@@ -177,6 +207,7 @@ export const updateCheckIn = asyncHandler(async (req: Request<{ id: string }, un
       });
       await prisma.auditLog.createMany({
         data: childGoals.map(cg => ({
+          tenantId: goal.tenantId,
           goalId: cg.id,
           userId: user.id,
           action: 'CHECKIN_SYNCED'
@@ -208,7 +239,7 @@ export const deleteCheckIn = asyncHandler(async (req: Request<{ id: string }>, r
     throw forbidden('Employees cannot directly delete check-ins for shared child goals');
   }
 
-  const cycle = await getActiveCycleOrThrow(goal.cycleId);
+  const cycle = await getActiveCycleOrThrow(user.tenantId, goal.cycleId);
   const cycleStatusObj = cycleStatus(cycle as any);
   const qStatus = cycleStatusObj.checkIns[checkIn.quarter];
   if (!qStatus || !qStatus.isOpen) {
@@ -217,6 +248,18 @@ export const deleteCheckIn = asyncHandler(async (req: Request<{ id: string }>, r
 
   await prisma.checkIn.delete({ where: { id: checkIn.id } });
   await createAuditLog({ goalId: goal.id, userId: user.id, action: 'CHECKIN_DELETED' });
+  await emitDomainEvent({
+    tenantId: user.tenantId,
+    eventName: 'checkin.deleted',
+    aggregateType: 'goal',
+    aggregateId: goal.id,
+    payload: {
+      goalId: goal.id,
+      checkInId: checkIn.id,
+      actorUserId: user.id,
+      quarter: checkIn.quarter
+    }
+  });
 
   if (goal.isShared && goal.parentGoalId === null) {
     const childGoals = await prisma.goal.findMany({ where: { parentGoalId: goal.id } });
@@ -229,6 +272,7 @@ export const deleteCheckIn = asyncHandler(async (req: Request<{ id: string }>, r
       });
       await prisma.auditLog.createMany({
         data: childGoals.map(cg => ({
+          tenantId: goal.tenantId,
           goalId: cg.id,
           userId: user.id,
           action: 'CHECKIN_SYNCED_DELETE'

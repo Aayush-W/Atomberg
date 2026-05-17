@@ -19,6 +19,10 @@
     @apply bg-surface-50 text-slate-800 dark:bg-surface-950 dark:text-slate-100 font-sans;
   }
 
+  #root {
+    @apply min-h-screen;
+  }
+
   h1, h2, h3, h4, h5, h6 {
     @apply font-display;
   }
@@ -44,12 +48,12 @@
 
   /* Premium card */
   .card {
-    @apply bg-surface-50/80 dark:bg-surface-900/40 backdrop-blur-lg rounded-[1.25rem] border border-white/50 dark:border-surface-800/50 shadow-[0_8px_30px_-4px_rgba(0,0,0,0.04)] dark:shadow-[0_8px_30px_-4px_rgba(0,0,0,0.2)];
+    @apply bg-surface-50/80 dark:bg-surface-900/40 backdrop-blur-lg rounded-2xl lg:rounded-[1.25rem] border border-white/50 dark:border-surface-800/50 shadow-[0_8px_30px_-4px_rgba(0,0,0,0.04)] dark:shadow-[0_8px_30px_-4px_rgba(0,0,0,0.2)];
   }
 
   /* Sidebar */
   .sidebar {
-    @apply fixed top-0 left-0 h-full w-[260px] bg-surface-900 dark:bg-surface-950 border-r border-surface-800 flex flex-col z-30;
+    @apply fixed top-0 left-0 h-full w-[260px] bg-surface-900 dark:bg-surface-950 border-r border-surface-800 flex flex-col z-40;
   }
 
   /* Gradient text */
@@ -69,7 +73,7 @@
 
   /* Form elements */
   .input {
-    @apply w-full px-4 py-3 rounded-2xl bg-surface-100/50 dark:bg-surface-800/50 border border-surface-200/50 dark:border-surface-700/50
+    @apply w-full px-4 py-3 rounded-xl sm:rounded-2xl bg-surface-100/50 dark:bg-surface-800/50 border border-surface-200/50 dark:border-surface-700/50
            text-sm text-slate-800 dark:text-slate-100 placeholder-slate-400
            focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500
            transition-all duration-150 shadow-inner;
@@ -81,7 +85,7 @@
 
   /* Buttons */
   .btn {
-    @apply inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-full text-sm font-semibold
+    @apply inline-flex items-center justify-center gap-2 px-4 py-2.5 sm:px-5 rounded-full text-sm font-semibold
            transition-all duration-150 disabled:opacity-50 disabled:pointer-events-none;
   }
   .btn-primary {
@@ -143,6 +147,12 @@
   }
   .animate-slide-in {
     animation: slideInRight 0.3s ease-out;
+  }
+}
+
+@layer utilities {
+  .mobile-stack {
+    @apply flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between;
   }
 }
 

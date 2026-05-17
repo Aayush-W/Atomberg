@@ -76,7 +76,7 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-surface-950 flex">
+    <div className="min-h-screen bg-surface-950 lg:flex">
       {/* Left — branding */}
       <div className="hidden lg:flex flex-col justify-between w-1/2 bg-gradient-to-br from-brand-950 via-brand-900 to-surface-950 p-12">
         <div className="flex items-center gap-3">
@@ -109,14 +109,31 @@ export default function LoginPage() {
       </div>
 
       {/* Right — form */}
-      <div className="flex-1 flex items-center justify-center p-6">
+      <div className="flex flex-1 items-start justify-center px-4 py-8 sm:px-6 lg:items-center lg:p-6">
         <div className="w-full max-w-md">
           {/* Mobile logo */}
-          <div className="flex items-center gap-2 mb-8 lg:hidden">
-            <div className="w-8 h-8 bg-brand-600 rounded-lg flex items-center justify-center">
-              <Zap size={16} className="text-white" />
+          <div className="mb-6 lg:hidden">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 bg-brand-600 rounded-lg flex items-center justify-center">
+                <Zap size={16} className="text-white" />
+              </div>
+              <span className="text-white font-display font-bold text-xl">GoalForge</span>
             </div>
-            <span className="text-white font-display font-bold text-xl">GoalForge</span>
+            <p className="mt-3 text-sm leading-6 text-slate-400">
+              Intelligent goal setting and progress tracking designed to feel clean and comfortable on a phone.
+            </p>
+            <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-3">
+              {[
+                { v: '13', l: 'Demo Users' },
+                { v: '5',  l: 'AI Features' },
+                { v: '4',  l: 'ML Models' },
+              ].map(({ v, l }) => (
+                <div key={l} className="rounded-2xl border border-white/10 bg-white/5 p-3 text-center">
+                  <p className="text-2xl font-display font-bold text-white">{v}</p>
+                  <p className="mt-1 text-[11px] text-brand-300">{l}</p>
+                </div>
+              ))}
+            </div>
           </div>
 
           <h1 className="text-2xl font-display font-bold text-white mb-1">Sign in</h1>
@@ -196,7 +213,7 @@ export default function LoginPage() {
           {/* Quick login */}
           <div className="mt-8">
             <p className="text-slate-500 text-xs text-center mb-3">Quick demo login</p>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
               {QUICK_LOGINS.map((acc) => (
                 <button
                   key={acc.email}

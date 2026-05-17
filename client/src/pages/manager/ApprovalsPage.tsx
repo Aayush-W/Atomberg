@@ -99,7 +99,7 @@ export default function ApprovalsPage() {
           const weightOk = Math.abs(totalWeight - 100) < 0.01;
           return (
             <div key={uid} className="card p-0 overflow-hidden">
-              <div className="px-5 py-4 border-b border-surface-100 dark:border-surface-800 flex items-center gap-4">
+              <div className="flex flex-col gap-3 border-b border-surface-100 px-4 py-4 dark:border-surface-800 sm:flex-row sm:items-center sm:px-5">
                 <div className="w-9 h-9 rounded-full bg-brand-600 flex items-center justify-center text-white font-bold">{emp?.name.charAt(0)}</div>
                 <div className="flex-1">
                   <p className="font-semibold text-slate-800 dark:text-white">{emp?.name}</p>
@@ -109,7 +109,7 @@ export default function ApprovalsPage() {
                   <span className="badge badge-rejected">Open conflict</span>
                 )}
                 <button onClick={() => checkConflicts(userGoals)} disabled={conflictLoading}
-                  className="btn-secondary btn btn-sm gap-1.5">
+                  className="btn-secondary btn btn-sm w-full gap-1.5 sm:w-auto">
                   {conflictLoading ? <Spinner size={12}/> : <AlertTriangle size={13}/>} Check Conflicts
                 </button>
               </div>
@@ -210,21 +210,21 @@ export default function ApprovalsPage() {
               const approveToken = adaptiveCard?.actions?.find((action) => action.title === 'Approve')?.data?.token;
               const rejectToken = adaptiveCard?.actions?.find((action) => action.title === 'Reject')?.data?.token;
               return (
-                <div key={card.id} className="px-5 py-4">
+                <div key={card.id} className="px-4 py-4 sm:px-5">
                   <p className="font-semibold text-slate-800 dark:text-white mb-1">{card.title}</p>
                   <p className="text-sm text-slate-500 mb-3">{card.message}</p>
-                  <div className="flex gap-2">
+                  <div className="flex flex-col gap-2 sm:flex-row">
                     <button
                       onClick={() => approveToken && teamsActionMut.mutate({ decision: 'approve', token: approveToken })}
                       disabled={!approveToken || teamsActionMut.isPending}
-                      className="btn-primary btn btn-sm"
+                      className="btn-primary btn btn-sm w-full sm:w-auto"
                     >
                       Approve From Teams
                     </button>
                     <button
                       onClick={() => rejectToken && teamsActionMut.mutate({ decision: 'reject', token: rejectToken })}
                       disabled={!rejectToken || teamsActionMut.isPending}
-                      className="btn-secondary btn btn-sm"
+                      className="btn-secondary btn btn-sm w-full sm:w-auto"
                     >
                       Reject From Teams
                     </button>

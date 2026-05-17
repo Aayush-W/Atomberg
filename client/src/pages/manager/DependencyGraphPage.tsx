@@ -8,19 +8,20 @@ import ReactFlow, {
   Edge,
   NodeProps,
   useEdgesState,
-  useNodesState
+  useNodesState,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 import { useQuery } from '@tanstack/react-query';
 import { goalsService } from '@/services/services';
 import { PageHeader, Spinner, StatusBadge } from '@/components/common';
 import type { GoalTreeLink, GoalTreeNode } from '@/types';
+import useMediaQuery from '@/hooks/useMediaQuery';
 
 const EDGE_COLORS: Record<GoalTreeLink['type'], string> = {
   org: '#64748b',
   ownership: '#38bdf8',
   shared: '#8b5cf6',
-  dependency: '#f59e0b'
+  dependency: '#f59e0b',
 };
 
 function GoalTreeCard({ data }: NodeProps<GoalTreeNode>) {
@@ -35,19 +36,33 @@ function GoalTreeCard({ data }: NodeProps<GoalTreeNode>) {
   }
 
   return (
-    <div className={`min-w-[240px] rounded-2xl border bg-surface-950/95 px-4 py-3 shadow-xl ${data.isShared ? 'border-purple-500/70' : 'border-surface-700'}`}>
+    <div
+      className={`min-w-[240px] rounded-2xl border bg-surface-950/95 px-4 py-3 shadow-xl ${
+        data.isShared ? 'border-purple-500/70' : 'border-surface-700'
+      }`}
+    >
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className="text-[10px] uppercase tracking-[0.2em] text-slate-400">{data.ownerName}</p>
           <p className="mt-1 text-sm font-bold text-white">{data.title}</p>
           <p className="text-xs text-slate-400">{data.subtitle}</p>
         </div>
-        {data.isShared ? <span className="rounded-full bg-purple-500/15 px-2 py-0.5 text-[10px] font-semibold text-purple-300">Shared</span> : null}
+        {data.isShared ? (
+          <span className="rounded-full bg-purple-500/15 px-2 py-0.5 text-[10px] font-semibold text-purple-300">
+            Shared
+          </span>
+        ) : null}
       </div>
       <div className="mt-3 flex items-center gap-2">
         <div className="h-1.5 flex-1 rounded-full bg-surface-700">
           <div
-            className={`h-full rounded-full ${data.progressScore >= 80 ? 'bg-success-400' : data.progressScore >= 50 ? 'bg-warning-400' : 'bg-danger-400'}`}
+            className={`h-full rounded-full ${
+              data.progressScore >= 80
+                ? 'bg-success-400'
+                : data.progressScore >= 50
+                ? 'bg-warning-400'
+                : 'bg-danger-400'
+            }`}
             style={{ width: `${Math.min(data.progressScore, 100)}%` }}
           />
         </div>
@@ -72,7 +87,9 @@ function buildDepthMap(nodes: GoalTreeNode[], edges: GoalTreeLink[]) {
     outgoing.set(edge.source, [...(outgoing.get(edge.source) ?? []), edge.target]);
   });
 
-  const queue = nodes.filter((node) => (incoming.get(node.id) ?? 0) === 0).map((node) => node.id);
+  const queue = nodes
+    .filter((node) => (incoming.get(node.id) ?? 0) === 0)
+    .map((node) => node.id);
   const depth = new Map<string, number>(queue.map((id) => [id, 0]));
 
   while (queue.length) {
@@ -98,11 +115,15 @@ function buildDepthMap(nodes: GoalTreeNode[], edges: GoalTreeLink[]) {
 }
 
 export default function DependencyGraphPage() {
-  const { data, isLoading } = useQuery({ queryKey: ['dependency-graph'], queryFn: goalsService.getDependencyGraph });
+  const { data, isLoading } = useQuery({
+    queryKey: ['dependency-graph'],
+    queryFn: goalsService.getDependencyGraph,
+  });
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
   const [selected, setSelected] = useState<GoalTreeNode | null>(null);
   const [filter, setFilter] = useState<'all' | GoalTreeLink['type']>('all');
+  const isMobile = useMediaQuery('(max-width: 767px)');
 
   const filteredLinks = useMemo(() => {
     const links = (data?.links ?? []) as GoalTreeLink[];
@@ -129,7 +150,7 @@ export default function DependencyGraphPage() {
             id: node.id,
             type: 'goalTreeCard',
             position: { x: level * 320, y: index * 180 },
-            data: node
+            data: node,
           });
         });
       });
@@ -138,43 +159,75 @@ export default function DependencyGraphPage() {
       id: link.id,
       source: link.source,
       target: link.target,
-      label: link.type === 'org' ? 'org' : link.type === 'ownership' ? 'owns' : link.type === 'shared' ? 'aligns' : 'depends on',
+      label:
+        link.type === 'org'
+          ? 'org'
+          : link.type === 'ownership'
+          ? 'owns'
+          : link.type === 'shared'
+          ? 'aligns'
+          : 'depends on',
       labelStyle: { fill: '#cbd5e1', fontSize: 11 },
       animated: link.type !== 'org',
-      style: { stroke: EDGE_COLORS[link.type], strokeWidth: link.type === 'dependency' ? 2.5 : 2 },
+      style: {
+        stroke: EDGE_COLORS[link.type],
+        strokeWidth: link.type === 'dependency' ? 2.5 : 2,
+      },
       markerEnd: {
         type: MarkerType.ArrowClosed,
-        color: EDGE_COLORS[link.type]
-      }
+        color: EDGE_COLORS[link.type],
+      },
     }));
 
     setNodes(flowNodes);
     setEdges(flowEdges);
   }, [data?.nodes, filteredLinks, setEdges, setNodes]);
 
+  const treeNodes = ((data?.nodes ?? []) as GoalTreeNode[]).filter((node) =>
+    filter === 'all' ? true : filteredLinks.some((link) => link.source === node.id || link.target === node.id)
+  );
+
   const stats = useMemo(() => {
-    const treeNodes = (data?.nodes ?? []) as GoalTreeNode[];
     return {
       users: treeNodes.filter((node) => node.kind === 'user').length,
       goals: treeNodes.filter((node) => node.kind === 'goal').length,
       shared: treeNodes.filter((node) => node.kind === 'goal' && node.isShared).length,
-      dependencies: ((data?.links ?? []) as GoalTreeLink[]).filter((link) => link.type === 'dependency').length
+      dependencies: filteredLinks.filter((link) => link.type === 'dependency').length,
     };
-  }, [data]);
+  }, [filteredLinks, treeNodes]);
 
   if (isLoading) {
-    return <div className="flex h-64 items-center justify-center"><Spinner size={32} /></div>;
+    return (
+      <div className="flex h-64 items-center justify-center">
+        <Spinner size={32} />
+      </div>
+    );
   }
 
   return (
     <div className="space-y-4 animate-fade-in">
-      <PageHeader title="Goal Tree Visualizer" subtitle="Trace work from individual execution up through shared goals and org ownership" />
+      <PageHeader
+        title="Goal Tree Visualizer"
+        subtitle="Trace work from individual execution up through shared goals and org ownership"
+      />
 
-      <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
-        <div className="card p-4"><p className="text-xs text-slate-400">People Nodes</p><p className="text-2xl font-display font-bold text-white">{stats.users}</p></div>
-        <div className="card p-4"><p className="text-xs text-slate-400">Goal Nodes</p><p className="text-2xl font-display font-bold text-white">{stats.goals}</p></div>
-        <div className="card p-4"><p className="text-xs text-slate-400">Shared Goal Links</p><p className="text-2xl font-display font-bold text-purple-300">{stats.shared}</p></div>
-        <div className="card p-4"><p className="text-xs text-slate-400">Dependency Links</p><p className="text-2xl font-display font-bold text-warning-300">{stats.dependencies}</p></div>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="card p-4">
+          <p className="text-xs text-slate-400">People Nodes</p>
+          <p className="text-2xl font-display font-bold text-white">{stats.users}</p>
+        </div>
+        <div className="card p-4">
+          <p className="text-xs text-slate-400">Goal Nodes</p>
+          <p className="text-2xl font-display font-bold text-white">{stats.goals}</p>
+        </div>
+        <div className="card p-4">
+          <p className="text-xs text-slate-400">Shared Goal Links</p>
+          <p className="text-2xl font-display font-bold text-purple-300">{stats.shared}</p>
+        </div>
+        <div className="card p-4">
+          <p className="text-xs text-slate-400">Dependency Links</p>
+          <p className="text-2xl font-display font-bold text-warning-300">{stats.dependencies}</p>
+        </div>
       </div>
 
       <div className="card flex flex-wrap items-center gap-2 p-4">
@@ -182,12 +235,16 @@ export default function DependencyGraphPage() {
           <button
             key={value}
             onClick={() => setFilter(value)}
-            className={`rounded-full px-3 py-1.5 text-xs font-semibold transition ${filter === value ? 'bg-brand-600 text-white' : 'bg-surface-800 text-slate-300 hover:bg-surface-700'}`}
+            className={`rounded-full px-3 py-1.5 text-xs font-semibold transition ${
+              filter === value
+                ? 'bg-brand-600 text-white'
+                : 'bg-surface-800 text-slate-300 hover:bg-surface-700'
+            }`}
           >
             {value === 'all' ? 'All links' : value}
           </button>
         ))}
-        <div className="ml-auto flex flex-wrap items-center gap-3 text-xs text-slate-400">
+        <div className="flex flex-wrap items-center gap-3 text-xs text-slate-400 sm:ml-auto">
           {Object.entries(EDGE_COLORS).map(([type, color]) => (
             <div key={type} className="flex items-center gap-2">
               <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: color }} />
@@ -197,55 +254,132 @@ export default function DependencyGraphPage() {
         </div>
       </div>
 
-      <div className="relative overflow-hidden rounded-3xl border border-surface-800 bg-surface-950" style={{ height: 'calc(100vh - 250px)' }}>
-        <ReactFlow
-          nodes={nodes}
-          edges={edges}
-          nodeTypes={nodeTypes}
-          onNodesChange={onNodesChange}
-          onEdgesChange={onEdgesChange}
-          onNodeClick={(_, node) => setSelected(node.data as GoalTreeNode)}
-          fitView
-          className="bg-surface-950"
-        >
-          <Background color="#334155" gap={20} />
-          <Controls className="!rounded-xl !border-surface-700 !bg-surface-900" />
-          <MiniMap
-            nodeColor={(node) => ((node.data as GoalTreeNode).kind === 'user' ? '#38bdf8' : '#8b5cf6')}
-            className="!rounded-xl !border-surface-700 !bg-surface-900"
-          />
-        </ReactFlow>
-
-        {selected ? (
-          <div className="absolute right-0 top-0 h-full w-80 overflow-y-auto border-l border-surface-800 bg-surface-900/95 p-5">
-            <div className="flex items-center justify-between">
-              <h3 className="text-sm font-semibold text-white">Selected Node</h3>
-              <button onClick={() => setSelected(null)} className="text-xl text-slate-400 hover:text-white">×</button>
-            </div>
-            <p className="mt-4 text-xs uppercase tracking-[0.2em] text-slate-400">{selected.kind}</p>
-            <p className="mt-1 text-lg font-bold text-white">{selected.title}</p>
-            <p className="text-sm text-slate-400">{selected.subtitle}</p>
-            {selected.kind === 'goal' ? (
-              <>
-                <div className="mt-4"><StatusBadge status={selected.status} /></div>
-                <div className="mt-4 rounded-2xl bg-surface-800 p-4">
-                  <p className="text-xs text-slate-400">Current Progress</p>
-                  <p className="mt-1 text-3xl font-display font-bold text-white">{selected.progressScore.toFixed(0)}%</p>
+      {isMobile ? (
+        <div className="space-y-3">
+          {treeNodes.map((node) => (
+            <button
+              key={node.id}
+              type="button"
+              onClick={() => setSelected(node)}
+              className="card w-full p-4 text-left"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-[11px] uppercase tracking-wide text-slate-400">{node.kind}</p>
+                  <p className="mt-1 text-sm font-semibold text-slate-800 dark:text-white">{node.title}</p>
+                  <p className="text-xs text-slate-400">{node.subtitle}</p>
                 </div>
+                {node.kind === 'goal' ? <StatusBadge status={node.status} /> : null}
+              </div>
+              {node.kind === 'goal' ? (
+                <div className="mt-3">
+                  <p className="mb-1 text-xs text-slate-400">Progress</p>
+                  <div className="h-2 rounded-full bg-surface-700">
+                    <div
+                      className={`h-full rounded-full ${
+                        node.progressScore >= 80
+                          ? 'bg-success-400'
+                          : node.progressScore >= 50
+                          ? 'bg-warning-400'
+                          : 'bg-danger-400'
+                      }`}
+                      style={{ width: `${Math.min(node.progressScore, 100)}%` }}
+                    />
+                  </div>
+                </div>
+              ) : null}
+            </button>
+          ))}
+
+          {selected ? (
+            <div className="card p-4">
+              <h3 className="text-sm font-semibold text-slate-800 dark:text-white">Selected Node</h3>
+              <p className="mt-2 text-xs uppercase tracking-wide text-slate-400">{selected.kind}</p>
+              <p className="mt-1 text-base font-bold text-slate-800 dark:text-white">{selected.title}</p>
+              <p className="text-sm text-slate-400">{selected.subtitle}</p>
+              {selected.kind === 'goal' ? (
                 <div className="mt-4 space-y-2 text-sm text-slate-300">
+                  <StatusBadge status={selected.status} />
                   <p>Owner: {selected.ownerName}</p>
+                  <p>Progress: {selected.progressScore.toFixed(0)}%</p>
                   <p>Shared Alignment: {selected.isShared ? 'Yes' : 'No'}</p>
                   <p>Parent Goal: {selected.parentGoalId ? 'Linked' : 'None'}</p>
                 </div>
-              </>
-            ) : (
-              <div className="mt-4 rounded-2xl bg-surface-800 p-4 text-sm text-slate-300">
-                This node represents the org hierarchy layer that the goal tree rolls up through.
+              ) : (
+                <p className="mt-4 text-sm text-slate-300">
+                  This node represents the org hierarchy layer that the goal tree rolls up through.
+                </p>
+              )}
+            </div>
+          ) : null}
+        </div>
+      ) : (
+        <div
+          className="relative overflow-hidden rounded-3xl border border-surface-800 bg-surface-950"
+          style={{ height: 'calc(100vh - 250px)' }}
+        >
+          <ReactFlow
+            nodes={nodes}
+            edges={edges}
+            nodeTypes={nodeTypes}
+            onNodesChange={onNodesChange}
+            onEdgesChange={onEdgesChange}
+            onNodeClick={(_, node) => setSelected(node.data as GoalTreeNode)}
+            fitView
+            className="bg-surface-950"
+          >
+            <Background color="#334155" gap={20} />
+            <Controls className="!rounded-xl !border-surface-700 !bg-surface-900" />
+            <MiniMap
+              nodeColor={(node) =>
+                (node.data as GoalTreeNode).kind === 'user' ? '#38bdf8' : '#8b5cf6'
+              }
+              className="!rounded-xl !border-surface-700 !bg-surface-900"
+            />
+          </ReactFlow>
+
+          {selected ? (
+            <div className="absolute right-0 top-0 h-full w-80 overflow-y-auto border-l border-surface-800 bg-surface-900/95 p-5">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-semibold text-white">Selected Node</h3>
+                <button
+                  onClick={() => setSelected(null)}
+                  className="text-xl text-slate-400 hover:text-white"
+                >
+                  x
+                </button>
               </div>
-            )}
-          </div>
-        ) : null}
-      </div>
+              <p className="mt-4 text-xs uppercase tracking-[0.2em] text-slate-400">
+                {selected.kind}
+              </p>
+              <p className="mt-1 text-lg font-bold text-white">{selected.title}</p>
+              <p className="text-sm text-slate-400">{selected.subtitle}</p>
+              {selected.kind === 'goal' ? (
+                <>
+                  <div className="mt-4">
+                    <StatusBadge status={selected.status} />
+                  </div>
+                  <div className="mt-4 rounded-2xl bg-surface-800 p-4">
+                    <p className="text-xs text-slate-400">Current Progress</p>
+                    <p className="mt-1 text-3xl font-display font-bold text-white">
+                      {selected.progressScore.toFixed(0)}%
+                    </p>
+                  </div>
+                  <div className="mt-4 space-y-2 text-sm text-slate-300">
+                    <p>Owner: {selected.ownerName}</p>
+                    <p>Shared Alignment: {selected.isShared ? 'Yes' : 'No'}</p>
+                    <p>Parent Goal: {selected.parentGoalId ? 'Linked' : 'None'}</p>
+                  </div>
+                </>
+              ) : (
+                <div className="mt-4 rounded-2xl bg-surface-800 p-4 text-sm text-slate-300">
+                  This node represents the org hierarchy layer that the goal tree rolls up through.
+                </div>
+              )}
+            </div>
+          ) : null}
+        </div>
+      )}
     </div>
   );
 }

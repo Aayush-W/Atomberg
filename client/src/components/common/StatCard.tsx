@@ -21,17 +21,17 @@ export default function StatCard({
 }: StatCardProps) {
   const trendUp = trend && trend.value >= 0;
   return (
-    <div className={`card p-5 flex flex-col gap-3 ${className}`}>
+    <div className={`card flex flex-col gap-3 p-4 sm:p-5 ${className}`}>
       <div className="flex items-center justify-between">
         <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">{title}</p>
         {icon && (
-          <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${colorMap[color]}`}>
+          <div className={`flex h-8 w-8 items-center justify-center rounded-xl sm:h-9 sm:w-9 ${colorMap[color]}`}>
             {icon}
           </div>
         )}
       </div>
       <div>
-        <p className="text-3xl font-display font-bold text-slate-800 dark:text-white">{value}</p>
+        <p className="text-2xl font-display font-bold text-slate-800 dark:text-white sm:text-3xl">{value}</p>
         {subtitle && <p className="text-xs text-slate-400 mt-0.5">{subtitle}</p>}
       </div>
       {trend && (

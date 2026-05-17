@@ -86,7 +86,7 @@ export default function CheckInPage() {
       )}
 
       {/* Quarter tabs */}
-      <div className="flex gap-2">
+      <div className="grid grid-cols-2 gap-2 sm:flex">
         {QUARTERS.map((q) => (
           <button key={q} onClick={() => setActiveQ(q)}
             className={`px-4 py-2 rounded-xl text-sm font-semibold transition-all ${activeQ === q ? 'bg-brand-600 text-white' : 'bg-surface-100 dark:bg-surface-800 text-slate-500 hover:text-slate-800 dark:hover:text-white'} ${q !== (cycleStatus?.activeQuarter ?? 'Q1') && q > (cycleStatus?.activeQuarter ?? 'Q1') ? 'opacity-40 pointer-events-none' : ''}`}>
@@ -104,12 +104,12 @@ export default function CheckInPage() {
             const previewScore = calcScore(g, v.actual, v.completionDate);
             return (
               <div key={g.id} className="card p-5 space-y-4">
-                <div className="flex items-start justify-between gap-4">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                   <div>
                     <h3 className="font-semibold text-slate-800 dark:text-white">{g.title}</h3>
                     <p className="text-xs text-slate-400 mt-0.5">{g.thrustArea} · Target: {g.target} · <StatusBadge status={g.uomType}/></p>
                   </div>
-                  <div className="text-right flex-shrink-0">
+                  <div className="flex-shrink-0 sm:text-right">
                     <p className="text-xs text-slate-400">Preview Score</p>
                     <p className={`text-2xl font-display font-bold ${previewScore >= 80 ? 'text-success-400' : previewScore >= 60 ? 'text-warning-400' : 'text-danger-400'}`}>{previewScore.toFixed(0)}%</p>
                   </div>
@@ -154,7 +154,7 @@ export default function CheckInPage() {
           })}
 
           <div className="flex justify-end">
-            <button onClick={() => submitMut.mutate()} disabled={!windowOpen || submitMut.isPending} className="btn-primary btn">
+            <button onClick={() => submitMut.mutate()} disabled={!windowOpen || submitMut.isPending} className="btn-primary btn w-full sm:w-auto">
               {submitMut.isPending ? 'Submitting…' : `Submit ${activeQ} Check-ins`}
             </button>
           </div>

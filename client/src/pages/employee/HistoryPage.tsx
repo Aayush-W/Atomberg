@@ -25,14 +25,14 @@ export default function HistoryPage() {
             })).sort((a, b) => a.quarter.localeCompare(b.quarter));
             return (
               <div key={g.id} className="card p-0 overflow-hidden">
-                <div className="px-5 py-4 border-b border-surface-100 dark:border-surface-800 flex items-center justify-between">
+                <div className="flex flex-col gap-2 border-b border-surface-100 px-4 py-4 dark:border-surface-800 sm:flex-row sm:items-center sm:justify-between sm:px-5">
                   <div>
                     <h3 className="font-semibold text-slate-800 dark:text-white">{g.title}</h3>
                     <p className="text-xs text-slate-400 mt-0.5">{g.thrustArea} · {g.uomType} · Target: {g.target} · Weight: {g.weightage}%</p>
                   </div>
                   <StatusBadge status={g.status}/>
                 </div>
-                <div className="p-5 grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div className="grid grid-cols-1 gap-6 p-4 sm:p-5 lg:grid-cols-2">
                   {/* Chart */}
                   <div>
                     <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-3">Progress Trend</p>

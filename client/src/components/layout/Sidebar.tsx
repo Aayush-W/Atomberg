@@ -1,14 +1,17 @@
-import { NavLink, useNavigate } from 'react-router-dom';
+import { useEffect } from 'react';
+import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, Target, CheckSquare, History, Users,
   ClipboardCheck, Share2, BarChart2, Network,
   Settings, RefreshCw, Calendar, Shield, FileText,
-  AlertTriangle, Brain, LogOut, Zap, PlugZap,
+  AlertTriangle, Brain, LogOut, Zap, PlugZap, X,
 } from 'lucide-react';
 import { useAuthStore } from '@/stores/authStore';
 import type { Role } from '@/types';
 import { authService } from '@/services/services';
 import toast from 'react-hot-toast';
+import { useUIStore } from '@/stores/uiStore';
+import useMediaQuery from '@/hooks/useMediaQuery';
 
 interface NavItem {
   to: string;
@@ -56,12 +59,23 @@ const DEMO_ACCOUNTS = [
 export default function Sidebar() {
   const { user, setAuth, logout } = useAuthStore();
   const navigate = useNavigate();
+  const location = useLocation();
+  const mobileSidebarOpen = useUIStore((s) => s.mobileSidebarOpen);
+  const setMobileSidebarOpen = useUIStore((s) => s.setMobileSidebarOpen);
+  const isDesktop = useMediaQuery('(min-width: 1024px)');
 
   const filtered = navItems.filter((item) => user && item.roles.includes(user.role));
+
+  useEffect(() => {
+    if (!isDesktop) {
+      setMobileSidebarOpen(false);
+    }
+  }, [location.pathname, isDesktop, setMobileSidebarOpen]);
 
   const handleLogout = async () => {
     try { await authService.logout(); } catch {}
     logout();
+    setMobileSidebarOpen(false);
     navigate('/login');
   };
 
@@ -72,6 +86,7 @@ export default function Sidebar() {
       const map: Record<Role, string> = {
         ADMIN: '/admin/dashboard', MANAGER: '/manager/dashboard', EMPLOYEE: '/employee/dashboard',
       };
+      setMobileSidebarOpen(false);
       navigate(map[data.user.role]);
       toast.success(`Switched to ${data.user.name}`);
     } catch {
@@ -80,14 +95,35 @@ export default function Sidebar() {
   };
 
   return (
-    <aside className="sidebar select-none">
+    <>
+      <div
+        className={`fixed inset-0 z-30 bg-surface-950/60 backdrop-blur-sm transition-opacity lg:hidden ${
+          mobileSidebarOpen ? 'opacity-100' : 'pointer-events-none opacity-0'
+        }`}
+        onClick={() => setMobileSidebarOpen(false)}
+      />
+      <aside
+        className={`sidebar select-none transition-transform duration-200 lg:translate-x-0 ${
+          mobileSidebarOpen ? 'translate-x-0' : '-translate-x-full'
+        }`}
+      >
       {/* Logo */}
-      <div className="px-5 py-5 border-b border-surface-800">
-        <div className="flex items-center gap-2.5">
+      <div className="px-4 py-4 border-b border-surface-800 sm:px-5 sm:py-5">
+        <div className="flex items-center justify-between gap-2.5">
+          <div className="flex items-center gap-2.5">
           <div className="w-8 h-8 bg-brand-600 rounded-lg flex items-center justify-center">
             <Zap size={16} className="text-white" />
           </div>
           <span className="text-white font-display font-bold text-lg">GoalForge</span>
+        </div>
+          <button
+            type="button"
+            onClick={() => setMobileSidebarOpen(false)}
+            className="rounded-lg p-2 text-slate-400 transition hover:bg-surface-800 hover:text-white lg:hidden"
+            aria-label="Close navigation"
+          >
+            <X size={18} />
+          </button>
         </div>
         {user && (
           <div className="mt-3 flex items-center gap-2.5">
@@ -159,6 +195,7 @@ export default function Sidebar() {
           Logout
         </button>
       </div>
-    </aside>
+      </aside>
+    </>
   );
 }

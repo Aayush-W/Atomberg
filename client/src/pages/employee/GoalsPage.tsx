@@ -46,10 +46,10 @@ export default function GoalsPage() {
     <div className="space-y-6 animate-fade-in">
       <PageHeader title="My Goals" subtitle="Manage your goals for the active cycle"
         actions={
-          <div className="flex items-center gap-2">
-            <Link to="/employee/goals/new" className="btn-primary btn gap-2"><Plus size={16}/>New Goal</Link>
+          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
+            <Link to="/employee/goals/new" className="btn-primary btn w-full gap-2 sm:w-auto"><Plus size={16}/>New Goal</Link>
             <button onClick={handleSubmitAll} disabled={goals.length === 0 || submitMut.isPending}
-              className="btn-secondary btn gap-2"><Send size={15}/>Submit All</button>
+              className="btn-secondary btn w-full gap-2 sm:w-auto"><Send size={15}/>Submit All</button>
           </div>
         } />
 
@@ -84,7 +84,7 @@ export default function GoalsPage() {
         <div className="space-y-3">
           {goals.map((g) => (
             <div key={g.id} className="card p-0 overflow-hidden">
-              <div className="px-5 py-4 flex items-center gap-4 cursor-pointer hover:bg-surface-50 dark:hover:bg-surface-800/50 transition-colors"
+              <div className="flex cursor-pointer items-start gap-4 px-4 py-4 transition-colors hover:bg-surface-50 dark:hover:bg-surface-800/50 sm:px-5"
                 onClick={() => setExpanded(expanded === g.id ? null : g.id)}>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
@@ -94,7 +94,7 @@ export default function GoalsPage() {
                   </div>
                   <p className="text-xs text-slate-400 mt-0.5">{g.thrustArea} · {g.uomType} · Target: {g.target} · Weight: {g.weightage}%</p>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 self-start">
                   {g.status === 'DRAFT' && (
                     <button onClick={(e) => { e.stopPropagation(); setDeleteId(g.id); }}
                       className="p-1.5 rounded-lg text-slate-400 hover:text-danger-400 hover:bg-danger-500/10 transition-all"><Trash2 size={15}/></button>
@@ -103,7 +103,7 @@ export default function GoalsPage() {
                 </div>
               </div>
               {expanded === g.id && (
-                <div className="px-5 pb-4 border-t border-surface-100 dark:border-surface-800 pt-4 space-y-3">
+                <div className="space-y-3 border-t border-surface-100 px-4 pb-4 pt-4 dark:border-surface-800 sm:px-5">
                   <div>
                     <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1">Description</p>
                     <p className="text-sm text-slate-700 dark:text-slate-200">{g.description}</p>
@@ -117,7 +117,7 @@ export default function GoalsPage() {
                   {g.checkIns && g.checkIns.length > 0 && (
                     <div>
                       <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">Check-in History</p>
-                      <div className="grid grid-cols-2 gap-2">
+                      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                         {g.checkIns.map((ci) => (
                           <div key={ci.id} className="rounded-xl bg-surface-50 dark:bg-surface-800 p-3">
                             <div className="flex items-center justify-between">

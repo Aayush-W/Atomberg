@@ -50,7 +50,7 @@ export default function DelegationsPage() {
       <PageHeader
         title="Approval Delegations"
         subtitle="Temporarily delegate approval rights while you are away"
-        actions={<button onClick={() => setOpen(true)} className="btn-primary btn">New Delegation</button>}
+        actions={<button onClick={() => setOpen(true)} className="btn-primary btn w-full sm:w-auto">New Delegation</button>}
       />
 
       <div className="card p-0 overflow-hidden">
@@ -100,7 +100,7 @@ export default function DelegationsPage() {
               {availableManagers.map((manager) => <option key={manager.id} value={manager.id}>{manager.name}</option>)}
             </select>
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
               <label className="label">Starts</label>
               <input type="datetime-local" value={form.startsAt} onChange={(e) => setForm((prev) => ({ ...prev, startsAt: e.target.value }))} className="input" />

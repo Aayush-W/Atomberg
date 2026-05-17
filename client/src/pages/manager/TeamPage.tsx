@@ -97,13 +97,13 @@ export default function TeamPage() {
             <div className="card p-12 text-center text-sm text-slate-400">Select a team member to view details</div>
           ) : (
             <div className="space-y-4">
-              <div className="card flex items-center gap-4 p-5">
+              <div className="card flex flex-col gap-4 p-5 sm:flex-row sm:items-center">
                 <div className="flex h-12 w-12 items-center justify-center rounded-full bg-brand-600 text-xl font-bold text-white">{selectedUser.name.charAt(0)}</div>
                 <div>
                   <h2 className="text-lg font-bold text-slate-800 dark:text-white">{selectedUser.name}</h2>
                   <p className="text-sm text-slate-400">{selectedUser.email} · {selectedUser.department}</p>
                 </div>
-                <button onClick={() => reviewMut.mutate(selectedUser.id)} disabled={reviewMut.isPending} className="btn btn-primary ml-auto">
+                <button onClick={() => reviewMut.mutate(selectedUser.id)} disabled={reviewMut.isPending} className="btn btn-primary w-full sm:ml-auto sm:w-auto">
                   {reviewMut.isPending ? 'Drafting...' : 'Auto-Draft Review'}
                 </button>
               </div>
@@ -166,7 +166,7 @@ export default function TeamPage() {
                           })
                         }
                         disabled={!kudosForms[goal.id]?.note || kudosMut.isPending}
-                        className="btn btn-primary"
+                        className="btn btn-primary w-full md:w-auto"
                       >
                         Send Kudos
                       </button>
@@ -193,7 +193,7 @@ export default function TeamPage() {
                               {checkIn.managerComment}
                             </div>
                           ) : (
-                            <div className="mt-2 flex gap-2">
+                            <div className="mt-2 flex flex-col gap-2 sm:flex-row">
                               <input
                                 placeholder="Add comment..."
                                 value={commentTexts[checkIn.id] || ''}
@@ -203,7 +203,7 @@ export default function TeamPage() {
                               <button
                                 onClick={() => commentMut.mutate({ id: checkIn.id, comment: commentTexts[checkIn.id] || '' })}
                                 disabled={!commentTexts[checkIn.id] || commentMut.isPending}
-                                className="btn btn-primary btn-sm"
+                                className="btn btn-primary btn-sm w-full sm:w-auto"
                               >
                                 Save
                               </button>

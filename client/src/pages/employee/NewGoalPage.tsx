@@ -151,7 +151,7 @@ export default function NewGoalPage() {
               ))}
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             {uomType !== 'ZERO' && (
               <div>
                 <label className="label">Target Value</label>
@@ -180,9 +180,9 @@ export default function NewGoalPage() {
             </select>
             <p className="text-xs text-slate-400 mt-1">Admins see technical and financial goals in masked form on analytics exports.</p>
           </div>
-          <div className="flex justify-end gap-3 pt-2 border-t border-surface-100 dark:border-surface-800">
-            <button type="button" onClick={() => navigate('/employee/goals')} className="btn-secondary btn">Cancel</button>
-            <button type="submit" disabled={isSubmitting || createMut.isPending} className="btn-primary btn">
+          <div className="flex flex-col-reverse gap-3 pt-2 border-t border-surface-100 dark:border-surface-800 sm:flex-row sm:justify-end">
+            <button type="button" onClick={() => navigate('/employee/goals')} className="btn-secondary btn w-full sm:w-auto">Cancel</button>
+            <button type="submit" disabled={isSubmitting || createMut.isPending} className="btn-primary btn w-full sm:w-auto">
               {createMut.isPending ? <><Loader2 size={14} className="animate-spin"/>Creating…</> : <><Check size={14}/>Create Goal</>}
             </button>
           </div>
@@ -238,7 +238,7 @@ export default function NewGoalPage() {
           )}
           {autopilotGoals.length > 0 && (
             <div className="mt-5 border-t border-surface-200 dark:border-surface-800 pt-4 space-y-3">
-              <div className="flex items-center justify-between gap-3">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Goal Autopilot</p>
                   <p className="text-xs text-slate-500">{autopilotGoals.length} goals · {autopilotGoals.reduce((sum, goal) => sum + goal.weightage, 0)}% total weight</p>
@@ -247,7 +247,7 @@ export default function NewGoalPage() {
                   type="button"
                   onClick={() => importMut.mutate(autopilotGoals)}
                   disabled={importMut.isPending}
-                  className="btn-primary btn btn-sm"
+                  className="btn-primary btn btn-sm w-full sm:w-auto"
                 >
                   {importMut.isPending ? 'Importing…' : 'Import Portfolio'}
                 </button>

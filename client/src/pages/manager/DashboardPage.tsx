@@ -43,7 +43,7 @@ export default function ManagerDashboard() {
     <div className="space-y-6 animate-fade-in">
       <PageHeader title="Manager Dashboard" subtitle="Team overview, retention risk, and pending actions" />
 
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard title="Team Size" value={team.length} icon={<Users size={18} />} color="brand" />
         <StatCard title="Pending Approvals" value={pending} icon={<ClipboardCheck size={18} />} color="warning" />
         <StatCard title="Team Avg Progress" value={`${avgProgress.toFixed(0)}%`} icon={<TrendingUp size={18} />} color="success" />
@@ -119,7 +119,7 @@ export default function ManagerDashboard() {
           ) : (
             <div className="divide-y divide-surface-100 dark:divide-surface-800">
               {teamGoals.filter((goal) => goal.status === 'SUBMITTED').slice(0, 5).map((goal) => (
-                <div key={goal.id} className="flex items-center gap-3 px-5 py-3">
+                <div key={goal.id} className="flex items-start gap-3 px-4 py-3 sm:px-5">
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium text-slate-800 dark:text-white">{goal.title}</p>
                     <p className="text-xs text-slate-400">{goal.user?.name} · {goal.weightage}%</p>

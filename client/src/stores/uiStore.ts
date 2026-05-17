@@ -4,9 +4,12 @@ import { persist } from 'zustand/middleware';
 interface UIState {
   darkMode: boolean;
   sidebarCollapsed: boolean;
+  mobileSidebarOpen: boolean;
   toggleDarkMode: () => void;
   toggleSidebar: () => void;
   setSidebarCollapsed: (v: boolean) => void;
+  toggleMobileSidebar: () => void;
+  setMobileSidebarOpen: (v: boolean) => void;
 }
 
 export const useUIStore = create<UIState>()(
@@ -14,6 +17,7 @@ export const useUIStore = create<UIState>()(
     (set) => ({
       darkMode: false,
       sidebarCollapsed: false,
+      mobileSidebarOpen: false,
 
       toggleDarkMode: () =>
         set((state) => {
@@ -27,6 +31,9 @@ export const useUIStore = create<UIState>()(
         set((state) => ({ sidebarCollapsed: !state.sidebarCollapsed })),
 
       setSidebarCollapsed: (v) => set({ sidebarCollapsed: v }),
+      toggleMobileSidebar: () =>
+        set((state) => ({ mobileSidebarOpen: !state.mobileSidebarOpen })),
+      setMobileSidebarOpen: (v) => set({ mobileSidebarOpen: v }),
     }),
     { name: 'goalforge-ui' }
   )

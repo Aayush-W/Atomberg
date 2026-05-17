@@ -1,19 +1,21 @@
 import { useState } from 'react';
-import { Bell, Sun, Moon, ChevronDown } from 'lucide-react';
+import { Bell, Sun, Moon, ChevronDown, Menu } from 'lucide-react';
 import { useAuthStore } from '@/stores/authStore';
 import { useUIStore } from '@/stores/uiStore';
 import { useNotificationStore } from '@/stores/notificationStore';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { notificationsService } from '@/services/services';
 import { format } from 'date-fns';
+import useMediaQuery from '@/hooks/useMediaQuery';
 
 export default function Navbar() {
   const user = useAuthStore((s) => s.user);
-  const { darkMode, toggleDarkMode } = useUIStore();
+  const { darkMode, toggleDarkMode, toggleMobileSidebar } = useUIStore();
   const { notifications, unreadCount, setNotifications, markRead, markAllRead } =
     useNotificationStore();
   const [notifOpen, setNotifOpen] = useState(false);
   const qc = useQueryClient();
+  const isDesktop = useMediaQuery('(min-width: 1024px)');
 
   useQuery({
     queryKey: ['notifications'],
@@ -36,11 +38,28 @@ export default function Navbar() {
   });
 
   return (
-    <header className="h-14 flex items-center justify-between px-6 bg-white dark:bg-surface-900 border-b border-surface-200 dark:border-surface-800 z-20 flex-shrink-0">
-      {/* Breadcrumb placeholder */}
-      <div />
+    <header className="sticky top-0 z-20 flex h-14 flex-shrink-0 items-center justify-between border-b border-surface-200 bg-white px-4 dark:border-surface-800 dark:bg-surface-900 sm:px-5 lg:px-6">
+      <div className="flex min-w-0 items-center gap-3">
+        {!isDesktop && (
+          <button
+            onClick={toggleMobileSidebar}
+            className="rounded-lg p-2 text-slate-500 transition-all hover:bg-surface-100 hover:text-slate-800 dark:hover:bg-surface-800 dark:hover:text-white"
+            aria-label="Open navigation"
+          >
+            <Menu size={18} />
+          </button>
+        )}
+        {!isDesktop && (
+          <div className="min-w-0">
+            <p className="truncate text-sm font-semibold text-slate-800 dark:text-white">
+              {user?.tenantName ?? 'GoalForge'}
+            </p>
+            <p className="truncate text-[11px] text-slate-400">{user?.role}</p>
+          </div>
+        )}
+      </div>
 
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-2 sm:gap-3">
         {/* Dark mode */}
         <button
           onClick={toggleDarkMode}
@@ -65,7 +84,7 @@ export default function Navbar() {
           </button>
 
           {notifOpen && (
-            <div className="absolute right-0 top-12 w-80 card shadow-xl z-50 animate-fade-in overflow-hidden">
+            <div className="absolute right-0 top-12 z-50 w-[min(20rem,calc(100vw-1rem))] overflow-hidden card shadow-xl animate-fade-in sm:w-80">
               <div className="flex items-center justify-between px-4 py-3 border-b border-surface-100 dark:border-surface-800">
                 <span className="text-sm font-semibold text-slate-800 dark:text-white">
                   Notifications
@@ -115,7 +134,7 @@ export default function Navbar() {
         </div>
 
         {/* User avatar */}
-        <div className="flex items-center gap-2 pl-2 border-l border-surface-200 dark:border-surface-700">
+        <div className="flex items-center gap-2 border-l border-surface-200 pl-2 dark:border-surface-700">
           <div className="w-8 h-8 rounded-full bg-brand-600 flex items-center justify-center text-white text-sm font-bold">
             {user?.name?.charAt(0) ?? '?'}
           </div>

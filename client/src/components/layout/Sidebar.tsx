@@ -3,7 +3,7 @@ import {
   LayoutDashboard, Target, CheckSquare, History, Users,
   ClipboardCheck, Share2, BarChart2, Network,
   Settings, RefreshCw, Calendar, Shield, FileText,
-  AlertTriangle, Brain, LogOut, Zap,
+  AlertTriangle, Brain, LogOut, Zap, PlugZap,
 } from 'lucide-react';
 import { useAuthStore } from '@/stores/authStore';
 import type { Role } from '@/types';
@@ -31,6 +31,7 @@ const navItems: NavItem[] = [
   { to: '/manager/shared-goals',    label: 'Shared Goals',     icon: <Share2 size={18} />,           roles: ['MANAGER'] },
   { to: '/manager/analytics',       label: 'Analytics',        icon: <BarChart2 size={18} />,        roles: ['MANAGER'] },
   { to: '/manager/dependency-graph',label: 'Dependency Graph', icon: <Network size={18} />,          roles: ['MANAGER'] },
+  { to: '/manager/integrations',    label: 'Integrations',     icon: <PlugZap size={18} />,          roles: ['MANAGER', 'ADMIN'] },
   { to: '/manager/delegations',     label: 'Delegations',      icon: <Settings size={18} />,         roles: ['MANAGER', 'ADMIN'] },
 
   // Admin
@@ -43,6 +44,7 @@ const navItems: NavItem[] = [
   { to: '/admin/audit',            label: 'Audit Log',       icon: <Shield size={18} />,            roles: ['ADMIN'] },
   { to: '/admin/ml-insights',      label: 'ML Insights',     icon: <Brain size={18} />,             roles: ['ADMIN'] },
   { to: '/admin/dependency-graph', label: 'Dependency Graph',icon: <Network size={18} />,           roles: ['ADMIN'] },
+  { to: '/admin/integrations',     label: 'Integrations',    icon: <PlugZap size={18} />,           roles: ['ADMIN'] },
 ];
 
 const DEMO_ACCOUNTS = [

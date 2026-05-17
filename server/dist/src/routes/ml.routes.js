@@ -12,3 +12,4 @@ exports.mlRouter.get('/anomalies', ml_controller_1.getAnomalies);
 exports.mlRouter.post('/suggest-thrust-area', ml_controller_1.suggestThrustArea);
 exports.mlRouter.get('/sentiment-trends', ml_controller_1.sentimentTrends);
 exports.mlRouter.get('/team-sentiment', ml_controller_1.teamSentiment);
+exports.mlRouter.get('/flight-risk', ml_controller_1.flightRisk);

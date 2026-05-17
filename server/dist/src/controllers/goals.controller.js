@@ -363,13 +363,13 @@ exports.getGoalAudit = (0, asyncHandler_1.asyncHandler)(async (req, res) => {
 });
 exports.getDependencyGraph = (0, asyncHandler_1.asyncHandler)(async (req, res) => {
     const user = currentUser(req);
-    const where = user.role === client_1.Role.ADMIN
+    const goalWhere = user.role === client_1.Role.ADMIN
         ? {}
         : user.role === client_1.Role.MANAGER
             ? { user: { managerId: user.id } }
             : { userId: user.id };
     const goals = await prisma_1.prisma.goal.findMany({
-        where,
+        where: goalWhere,
         include: {
             user: { select: { id: true, name: true, department: true, managerId: true } },
             checkIns: true,
@@ -385,12 +385,89 @@ exports.getDependencyGraph = (0, asyncHandler_1.asyncHandler)(async (req, res) =
             requiredGoalId: { in: goalIds }
         }
     });
+    const userIds = new Set();
+    goals.forEach((goal) => {
+        userIds.add(goal.user.id);
+        if (goal.user.managerId) {
+            userIds.add(goal.user.managerId);
+        }
+    });
+    if (user.managerId) {
+        userIds.add(user.managerId);
+    }
+    userIds.add(user.id);
+    const users = await prisma_1.prisma.user.findMany({
+        where: { id: { in: [...userIds] } },
+        select: {
+            id: true,
+            name: true,
+            role: true,
+            department: true,
+            managerId: true
+        }
+    });
+    const goalNodes = goals.map((goal) => ({
+        id: `goal:${goal.id}`,
+        kind: 'goal',
+        entityId: goal.id,
+        title: goal.title,
+        subtitle: goal.thrustArea,
+        ownerName: goal.user.name,
+        status: goal.status,
+        progressScore: goal.checkIns.at(-1)?.progressScore ?? 0,
+        isShared: goal.isShared,
+        parentGoalId: goal.parentGoalId
+    }));
+    const userNodes = users.map((person) => ({
+        id: `user:${person.id}`,
+        kind: 'user',
+        entityId: person.id,
+        title: person.name,
+        subtitle: `${person.role} · ${person.department}`,
+        ownerName: person.name,
+        status: person.role,
+        progressScore: 0,
+        isShared: false,
+        parentGoalId: null
+    }));
+    const links = [
+        ...users
+            .filter((person) => person.managerId && userIds.has(person.managerId))
+            .map((person) => ({
+            id: `org:${person.managerId}:${person.id}`,
+            source: `user:${person.managerId}`,
+            target: `user:${person.id}`,
+            type: 'org'
+        })),
+        ...goals.map((goal) => ({
+            id: `owner:${goal.userId}:${goal.id}`,
+            source: `user:${goal.userId}`,
+            target: `goal:${goal.id}`,
+            type: 'ownership'
+        })),
+        ...goals
+            .filter((goal) => goal.parentGoalId)
+            .map((goal) => ({
+            id: `shared:${goal.parentGoalId}:${goal.id}`,
+            source: `goal:${goal.parentGoalId}`,
+            target: `goal:${goal.id}`,
+            type: 'shared'
+        })),
+        ...dependencies.map((dependency) => ({
+            id: `dep:${dependency.requiredGoalId}:${dependency.dependentGoalId}`,
+            source: `goal:${dependency.requiredGoalId}`,
+            target: `goal:${dependency.dependentGoalId}`,
+            type: 'dependency'
+        }))
+    ];
     res.json({
         goals: goals.map((goal) => ({
             ...goal,
             progressScore: goal.checkIns.at(-1)?.progressScore ?? 0
         })),
-        dependencies
+        dependencies,
+        nodes: [...userNodes, ...goalNodes],
+        links
     });
 });
 exports.addDependency = (0, asyncHandler_1.asyncHandler)(async (req, res) => {

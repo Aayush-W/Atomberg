@@ -4,12 +4,21 @@ const apiKey = process.env.ANTHROPIC_API_KEY;
 const client = apiKey ? new Anthropic({ apiKey }) : null;
 
 type GoalLike = {
+  id?: string;
   title?: string;
   description?: string;
   thrustArea?: string;
   target?: number;
   uomType?: string;
   weightage?: number;
+};
+
+type ChatGoalContext = {
+  id: string;
+  title: string;
+  target: number;
+  uomType: string;
+  latestActualValue?: number;
 };
 
 const AUTOPILOT_LIBRARY: Record<
@@ -192,6 +201,24 @@ async function completeJson<T>(system: string, userContent: string): Promise<T |
   return extractJson<T>(text);
 }
 
+async function completeText(system: string, userContent: string, maxTokens = 900): Promise<string | null> {
+  if (!client) {
+    return null;
+  }
+
+  const message = await client.messages.create({
+    model: 'claude-sonnet-4-20250514',
+    max_tokens: maxTokens,
+    system,
+    messages: [{ role: 'user', content: userContent }]
+  });
+
+  return message.content
+    .map((part) => ('text' in part ? part.text : ''))
+    .join('\n')
+    .trim();
+}
+
 function inferAutopilotKey(jobTitle: string, department?: string) {
   const haystack = `${jobTitle} ${department ?? ''}`.toLowerCase();
   if (haystack.includes('manager') || haystack.includes('lead')) return 'manager';
@@ -353,4 +380,123 @@ export async function goalAutopilot(jobTitle: string, department?: string) {
   }
 
   return { goals: AUTOPILOT_LIBRARY[inferAutopilotKey(jobTitle, department)] };
+}
+
+export async function draftPerformanceReview(payload: {
+  employeeName: string;
+  managerName?: string | null;
+  cycleName?: string | null;
+  summaryMetrics: Record<string, unknown>;
+  goals: Array<Record<string, unknown>>;
+  checkIns: Array<Record<string, unknown>>;
+  kudos: Array<Record<string, unknown>>;
+}) {
+  const prompt = JSON.stringify(payload);
+  const text = await completeText(
+    'You are an empathetic but objective performance review assistant. Write exactly three short paragraphs: 1) overall impact and strengths, 2) measurable evidence with balanced context, 3) growth areas and next-step coaching. Avoid cliches and do not mention AI.',
+    prompt,
+    1000
+  );
+
+  if (text) {
+    return {
+      draft: text,
+      highlights: [
+        'Evidence grounded in goals, check-ins, and kudos.',
+        'Balanced tone with both strengths and growth areas.',
+        'Ready for manager editing before final submission.'
+      ]
+    };
+  }
+
+  const metrics = payload.summaryMetrics as {
+    goalsCompleted?: number;
+    averageProgress?: number;
+    kudosCount?: number;
+    averageSentiment?: number;
+  };
+  const goalsCompleted = metrics.goalsCompleted ?? 0;
+  const averageProgress = Math.round(Number(metrics.averageProgress ?? 0));
+  const kudosCount = metrics.kudosCount ?? 0;
+  const sentiment = Number(metrics.averageSentiment ?? 0).toFixed(2);
+
+  const draft = `${payload.employeeName} demonstrated consistent ownership across ${payload.cycleName ?? 'the review period'}, with the strongest impact showing up in delivery follow-through and cross-functional collaboration. Across the portfolio, the employee translated goals into visible execution and maintained momentum on key priorities, while also earning recognition from peers for helpfulness and team contribution.
+
+Measured performance was steady, with ${goalsCompleted} goal(s) reaching a completed or locked state, average goal progress at ${averageProgress}%, and ${kudosCount} documented peer recognition moment(s). Check-in sentiment averaged ${sentiment}, which gives useful context for pacing and support needs alongside the headline delivery numbers.
+
+Going forward, the biggest opportunity is to build on current strengths while making risk signals visible earlier, especially when priorities compete or workload starts to compress. A strong manager follow-up would be to reinforce measurable milestones, protect focus on the highest-impact work, and continue coaching toward durable, sustainable execution.`;
+
+  return {
+    draft,
+    highlights: [
+      'Three-paragraph draft generated from historical performance evidence.',
+      'Includes objective metrics plus narrative coaching context.',
+      'Can be copied into a formal review with light edits.'
+    ]
+  };
+}
+
+function overlapScore(command: string, title: string) {
+  const commandTerms = new Set(command.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean));
+  return title
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter(Boolean)
+    .reduce((score, term) => score + (commandTerms.has(term) ? 1 : 0), 0);
+}
+
+function fallbackGoalMatch(command: string, goals: ChatGoalContext[]) {
+  return [...goals].sort((a, b) => overlapScore(command, b.title) - overlapScore(command, a.title))[0] ?? null;
+}
+
+function fallbackChatOpsParse(command: string, goals: ChatGoalContext[]) {
+  const matchedGoal = fallbackGoalMatch(command, goals);
+  const numericMatches = command.match(/-?\d+(?:,\d{3})*(?:\.\d+)?/g) ?? [];
+  const lastNumeric = numericMatches.length > 0 ? Number(numericMatches[numericMatches.length - 1].replace(/,/g, '')) : null;
+  const normalized = command.toLowerCase();
+
+  if (!matchedGoal) {
+    return {
+      intent: 'unknown',
+      goalId: null,
+      value: null,
+      status: null
+    };
+  }
+
+  if (/(target|goal)\s+to/.test(normalized) || normalized.includes('update my') || normalized.includes('set my')) {
+    return { intent: 'update_target', goalId: matchedGoal.id, value: lastNumeric, status: null };
+  }
+
+  if (normalized.includes('actual') || normalized.includes('progress') || normalized.includes('done') || normalized.includes('closed')) {
+    return { intent: 'log_progress', goalId: matchedGoal.id, value: lastNumeric, status: null };
+  }
+
+  if (normalized.includes('completed')) {
+    return { intent: 'update_status', goalId: matchedGoal.id, value: null, status: 'COMPLETED' };
+  }
+
+  if (normalized.includes('on track')) {
+    return { intent: 'update_status', goalId: matchedGoal.id, value: null, status: 'ON_TRACK' };
+  }
+
+  return { intent: 'unknown', goalId: matchedGoal.id, value: lastNumeric, status: null };
+}
+
+export async function parseChatOpsCommand(command: string, goals: ChatGoalContext[]) {
+  const ai = await completeJson<{
+    intent: 'update_target' | 'log_progress' | 'update_status' | 'unknown';
+    goalId: string | null;
+    value: number | null;
+    status: 'NOT_STARTED' | 'ON_TRACK' | 'COMPLETED' | null;
+  }>(
+    'You are a workflow bot that converts Teams or Slack commands into goal updates. Match only against the provided goals and return JSON only: { intent, goalId, value, status }.',
+    JSON.stringify({ command, goals })
+  );
+
+  if (ai) {
+    return ai;
+  }
+
+  return fallbackChatOpsParse(command, goals);
 }

@@ -1,6 +1,14 @@
 import { Router } from 'express';
 import { requireAuth } from '../middleware/auth.middleware';
-import { smartRewrite, conflictCheck, suggestWeightage, conversationalCheckin, goalSummary, goalAutopilot } from '../controllers/ai.controller';
+import {
+  smartRewrite,
+  conflictCheck,
+  suggestWeightage,
+  conversationalCheckin,
+  goalSummary,
+  goalAutopilot,
+  performanceReviewDraft
+} from '../controllers/ai.controller';
 
 export const aiRouter = Router();
 aiRouter.use(requireAuth);
@@ -10,3 +18,4 @@ aiRouter.post('/suggest-weightage', suggestWeightage);
 aiRouter.post('/conversational-checkin', conversationalCheckin);
 aiRouter.post('/goal-summary', goalSummary);
 aiRouter.post('/goal-autopilot', goalAutopilot);
+aiRouter.post('/performance-review', performanceReviewDraft);

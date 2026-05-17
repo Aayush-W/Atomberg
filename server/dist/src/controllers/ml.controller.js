@@ -3,10 +3,11 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.teamSentiment = exports.sentimentTrends = exports.suggestThrustArea = exports.getAnomalies = exports.goalQuality = exports.predictAchievement = void 0;
+exports.flightRisk = exports.teamSentiment = exports.sentimentTrends = exports.suggestThrustArea = exports.getAnomalies = exports.goalQuality = exports.predictAchievement = void 0;
 const axios_1 = __importDefault(require("axios"));
 const client_1 = require("@prisma/client");
 const sentiment_service_1 = require("../services/sentiment.service");
+const risk_service_1 = require("../services/risk.service");
 const ML_URL = process.env.ML_SERVICE_URL || 'http://localhost:8001';
 const ML_UNAVAILABLE = { error: { code: 'ML_UNAVAILABLE', message: 'AI insights temporarily unavailable.' } };
 async function callML(path, data) {
@@ -74,3 +75,14 @@ const teamSentiment = async (req, res, next) => {
     }
 };
 exports.teamSentiment = teamSentiment;
+const flightRisk = async (req, res, next) => {
+    try {
+        const managerId = req.user?.role === client_1.Role.MANAGER && !req.query.managerId ? req.user.id : req.query.managerId;
+        const report = await (0, risk_service_1.buildFlightRiskReport)(managerId);
+        res.json(report);
+    }
+    catch (error) {
+        next(error);
+    }
+};
+exports.flightRisk = flightRisk;

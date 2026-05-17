@@ -1,4 +1,4 @@
-import { Prisma, Goal, UoMType } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import { Request, Response } from 'express';
 import { prisma } from '../lib/prisma';
 import { asyncHandler } from '../utils/asyncHandler';
@@ -8,36 +8,7 @@ import { currentUser as getCurrentUser } from './_helpers';
 import { ensureUserCanAccessGoal, createAuditLog, getActiveCycleOrThrow } from '../services/goalRules.service';
 import { cycleStatus } from '../services/cycleRules.service';
 import { calculateSentimentScore } from '../services/sentiment.service';
-
-function computeProgress(goal: Goal & { target: number | null; targetDate?: Date | null }, input: Partial<CreateCheckInInput & UpdateCheckInInput>) {
-  const uom = goal.uomType as UoMType;
-  const actual = typeof input.actualValue === 'number' ? input.actualValue : 0;
-
-  if (uom === UoMType.MAX) {
-    if (!goal.target || goal.target === 0 || actual === 0) return actual === 0 ? 100 : 0;
-    return Math.round((goal.target / actual) * 100);
-  }
-
-  if (uom === UoMType.MIN) {
-    if (!goal.target || goal.target === 0) return 0;
-    return Math.round((actual / goal.target) * 100);
-  }
-
-  if (uom === UoMType.TIMELINE) {
-    const completion = (input as any).completionDate as Date | string | undefined | null;
-    if (!goal.targetDate) return 0;
-    if (!completion) return 0;
-    const diff = Math.floor((goal.targetDate.getTime() - new Date(completion).getTime()) / (1000 * 60 * 60 * 24));
-    if (diff >= 0) return 100;
-    return Math.max(0, 100 + diff * 2);
-  }
-
-  if (uom === UoMType.ZERO) {
-    return actual === 0 ? 100 : 0;
-  }
-
-  return 0;
-}
+import { computeProgress } from '../services/checkinProgress.service';
 
 export const createCheckIn = asyncHandler(async (req: Request<unknown, unknown, CreateCheckInInput>, res: Response) => {
   const user = getCurrentUser(req as any);

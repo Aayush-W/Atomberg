@@ -1,12 +1,16 @@
-import { useQuery } from '@tanstack/react-query';
+import { useState } from 'react';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import { useAuthStore } from '@/stores/authStore';
-import { goalsService, cyclesService, mlService, kudosService } from '@/services/services';
+import { goalsService, cyclesService, mlService, kudosService, integrationsService } from '@/services/services';
 import { StatCard, PageHeader, Spinner, ErrorState, StatusBadge, ProgressBar, EmptyState } from '@/components/common';
-import { Target, CheckSquare, TrendingUp, AlertCircle, Plus, ClipboardCheck } from 'lucide-react';
+import { Target, CheckSquare, TrendingUp, AlertCircle, Plus, ClipboardCheck, Bot } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import toast from 'react-hot-toast';
 
 export default function EmployeeDashboard() {
   const user = useAuthStore((s) => s.user);
+  const [command, setCommand] = useState('Update my prototype goal to 3');
+  const [platform, setPlatform] = useState<'teams' | 'slack'>('teams');
 
   const { data: goals = [], isLoading, error, refetch } = useQuery({
     queryKey: ['my-goals'],
@@ -35,6 +39,10 @@ export default function EmployeeDashboard() {
     enabled: !!user?.id,
   });
   const myAnomaly = anomalies.find((a) => a.userId === user?.id && a.isAnomaly);
+  const chatopsMut = useMutation({
+    mutationFn: () => integrationsService.chatopsCommand(platform, command),
+    onError: (error: any) => toast.error(error?.response?.data?.error?.message ?? 'Bot could not process that command')
+  });
 
   if (!user || isLoading) return <div className="flex items-center justify-center h-64"><Spinner size={32} /></div>;
   if (error) return <ErrorState onRetry={refetch} />;
@@ -130,6 +138,50 @@ export default function EmployeeDashboard() {
                 </div>
               ))
             )}
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1.1fr,0.9fr]">
+        <div className="card p-5">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-brand-500/15 text-brand-300">
+              <Bot size={18} />
+            </div>
+            <div>
+              <h2 className="font-semibold text-slate-800 dark:text-white">ChatOps Bot</h2>
+              <p className="text-xs text-slate-400">Update goals from Teams or Slack using natural language.</p>
+            </div>
+          </div>
+          <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-[140px,1fr]">
+            <select value={platform} onChange={(e) => setPlatform(e.target.value as 'teams' | 'slack')} className="input">
+              <option value="teams">MS Teams</option>
+              <option value="slack">Slack</option>
+            </select>
+            <input value={command} onChange={(e) => setCommand(e.target.value)} className="input" />
+          </div>
+          <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-slate-400">
+            <span className="rounded-full bg-surface-800 px-2 py-1">Update my sales goal to 10000</span>
+            <span className="rounded-full bg-surface-800 px-2 py-1">Log progress on close tickets to 42</span>
+            <span className="rounded-full bg-surface-800 px-2 py-1">Mark my dashboard goal completed</span>
+          </div>
+          <button onClick={() => chatopsMut.mutate()} disabled={chatopsMut.isPending} className="btn btn-primary mt-4">
+            {chatopsMut.isPending ? 'Updating...' : 'Send Command'}
+          </button>
+          {chatopsMut.data ? (
+            <div className="mt-4 rounded-2xl border border-brand-500/20 bg-brand-500/10 p-4">
+              <p className="text-sm font-semibold text-brand-300">Bot Reply</p>
+              <p className="mt-2 text-sm text-slate-200">{chatopsMut.data.message}</p>
+            </div>
+          ) : null}
+        </div>
+
+        <div className="card p-5">
+          <h2 className="font-semibold text-slate-800 dark:text-white">Why Managers Love It</h2>
+          <div className="mt-4 space-y-3 text-sm text-slate-400">
+            <p>Employees can update targets, log actual progress, and mark work complete without opening the full app.</p>
+            <p>The bot still writes through the same audit-friendly goal and check-in model, so nothing becomes a side channel.</p>
+            <p>That makes Teams and Slack feel like first-class operating surfaces instead of just notification destinations.</p>
           </div>
         </div>
       </div>

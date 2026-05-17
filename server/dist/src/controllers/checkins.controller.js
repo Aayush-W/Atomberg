@@ -1,7 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.deleteCheckIn = exports.updateCheckIn = exports.getCheckIn = exports.listGoalCheckIns = exports.createCheckIn = void 0;
-const client_1 = require("@prisma/client");
 const prisma_1 = require("../lib/prisma");
 const asyncHandler_1 = require("../utils/asyncHandler");
 const errors_1 = require("../utils/errors");
@@ -9,35 +8,7 @@ const _helpers_1 = require("./_helpers");
 const goalRules_service_1 = require("../services/goalRules.service");
 const cycleRules_service_1 = require("../services/cycleRules.service");
 const sentiment_service_1 = require("../services/sentiment.service");
-function computeProgress(goal, input) {
-    const uom = goal.uomType;
-    const actual = typeof input.actualValue === 'number' ? input.actualValue : 0;
-    if (uom === client_1.UoMType.MAX) {
-        if (!goal.target || goal.target === 0 || actual === 0)
-            return actual === 0 ? 100 : 0;
-        return Math.round((goal.target / actual) * 100);
-    }
-    if (uom === client_1.UoMType.MIN) {
-        if (!goal.target || goal.target === 0)
-            return 0;
-        return Math.round((actual / goal.target) * 100);
-    }
-    if (uom === client_1.UoMType.TIMELINE) {
-        const completion = input.completionDate;
-        if (!goal.targetDate)
-            return 0;
-        if (!completion)
-            return 0;
-        const diff = Math.floor((goal.targetDate.getTime() - new Date(completion).getTime()) / (1000 * 60 * 60 * 24));
-        if (diff >= 0)
-            return 100;
-        return Math.max(0, 100 + diff * 2);
-    }
-    if (uom === client_1.UoMType.ZERO) {
-        return actual === 0 ? 100 : 0;
-    }
-    return 0;
-}
+const checkinProgress_service_1 = require("../services/checkinProgress.service");
 exports.createCheckIn = (0, asyncHandler_1.asyncHandler)(async (req, res) => {
     const user = (0, _helpers_1.currentUser)(req);
     if (!user)
@@ -58,7 +29,7 @@ exports.createCheckIn = (0, asyncHandler_1.asyncHandler)(async (req, res) => {
     if (!qStatus || !qStatus.isOpen) {
         throw (0, errors_1.badRequest)(`Check-in window for ${req.body.quarter} is closed`);
     }
-    const progress = computeProgress(goal, req.body);
+    const progress = (0, checkinProgress_service_1.computeProgress)(goal, req.body);
     const checkIn = await prisma_1.prisma.checkIn.create({
         data: {
             goalId: req.body.goalId,
@@ -163,7 +134,7 @@ exports.updateCheckIn = (0, asyncHandler_1.asyncHandler)(async (req, res) => {
         toUpdate.managerCheckedAt = new Date();
     }
     // recompute progress if numeric fields changed
-    const progress = computeProgress(goal, { ...existing, ...req.body });
+    const progress = (0, checkinProgress_service_1.computeProgress)(goal, { ...existing, ...req.body });
     toUpdate.progressScore = progress;
     toUpdate.sentiment = (0, sentiment_service_1.calculateSentimentScore)([
         req.body.employeeNote ?? existing.employeeNote,

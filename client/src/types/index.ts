@@ -70,6 +70,26 @@ export interface Goal {
   updatedAt: string;
 }
 
+export interface GoalTreeNode {
+  id: string;
+  kind: 'user' | 'goal';
+  entityId: string;
+  title: string;
+  subtitle: string;
+  ownerName: string;
+  status: string;
+  progressScore: number;
+  isShared: boolean;
+  parentGoalId?: string | null;
+}
+
+export interface GoalTreeLink {
+  id: string;
+  source: string;
+  target: string;
+  type: 'org' | 'ownership' | 'shared' | 'dependency';
+}
+
 export interface CheckIn {
   id: string;
   goalId: string;
@@ -158,6 +178,29 @@ export interface TeamSentimentSummary {
   alertFlags: string[];
 }
 
+export interface FlightRiskEmployee {
+  userId: string;
+  userName: string;
+  department: string;
+  jobTitle?: string | null;
+  managerName?: string | null;
+  riskScore: number;
+  riskLevel: 'HIGH' | 'MEDIUM' | 'LOW';
+  avgSentiment: number;
+  sentimentTrend: number;
+  afterHoursActivityRate: number;
+  maxCapacityGoals: number;
+  avgProgress: number;
+  kudosCount: number;
+  reasons: string[];
+  recommendedAction: string;
+}
+
+export interface FlightRiskReport {
+  summary: { high: number; medium: number; low: number };
+  employees: FlightRiskEmployee[];
+}
+
 export interface LeaderboardRow {
   department: string;
   onTimeCompliance: number;
@@ -194,6 +237,16 @@ export interface SmartRewriteResponse {
     timeBound: number;
   };
   suggestions: string[];
+}
+
+export interface PerformanceReviewDraftResponse {
+  employee: {
+    id: string;
+    name: string;
+    managerName?: string | null;
+  };
+  draft: string;
+  highlights: string[];
 }
 
 export interface GoalAutopilotGoal {
@@ -277,6 +330,28 @@ export interface CompletionDashboardRow {
   q2Done: boolean;
   q3Done: boolean;
   q4Done: boolean;
+}
+
+export interface ExternalSyncResult {
+  quarter: Quarter;
+  progressScore: number;
+  status: CheckInStatus;
+  message: string;
+  checkIn: CheckIn;
+  goal: Goal;
+}
+
+export interface ChatOpsResponse {
+  platform: string;
+  message: string;
+  goal?: Goal;
+  checkIn?: CheckIn;
+  parsed?: {
+    intent: 'update_target' | 'log_progress' | 'update_status' | 'unknown';
+    goalId: string | null;
+    value: number | null;
+    status: CheckInStatus | null;
+  };
 }
 
 // ---- Window status ----

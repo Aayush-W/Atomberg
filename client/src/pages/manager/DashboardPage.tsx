@@ -8,8 +8,8 @@ import { Link } from 'react-router-dom';
 export default function ManagerDashboard() {
   const user = useAuthStore((s) => s.user);
 
-  const { data: team = [], isLoading: teamLoading } = useQuery({ 
-    queryKey: ['team', user?.id], 
+  const { data: team = [], isLoading: teamLoading } = useQuery({
+    queryKey: ['team', user?.id],
     queryFn: () => usersService.getTeam(user?.id ?? ''),
     enabled: !!user?.id
   });
@@ -18,142 +18,152 @@ export default function ManagerDashboard() {
   const { data: teamSentiment } = useQuery({
     queryKey: ['team-sentiment', user?.id],
     queryFn: () => mlService.getTeamSentiment(user?.id),
-    enabled: !!user?.id,
+    enabled: !!user?.id
+  });
+  const { data: flightRisk } = useQuery({
+    queryKey: ['flight-risk', user?.id],
+    queryFn: () => mlService.getFlightRisk(user?.id),
+    enabled: !!user?.id
   });
   const { data: teamCards = [] } = useQuery({
     queryKey: ['teams-cards', user?.id],
     queryFn: () => integrationsService.getTeamsCards(user?.id ?? ''),
-    enabled: !!user?.id,
+    enabled: !!user?.id
   });
 
-  if (!user || teamLoading || goalsLoading) return <div className="flex items-center justify-center h-64"><Spinner size={32}/></div>;
-  if (error) return <ErrorState onRetry={refetch}/>;
+  if (!user || teamLoading || goalsLoading) return <div className="flex h-64 items-center justify-center"><Spinner size={32} /></div>;
+  if (error) return <ErrorState onRetry={refetch} />;
 
-  const pending = teamGoals.filter((g) => g.status === 'SUBMITTED').length;
-  const teamAnomalies = anomalies.filter((a) => team.some((u) => u.id === a.userId) && a.isAnomaly);
-  const avgProgress = teamGoals.length ? teamGoals.reduce((s, g) => s + (g.checkIns?.[0]?.progressScore ?? 0), 0) / teamGoals.length : 0;
+  const pending = teamGoals.filter((goal) => goal.status === 'SUBMITTED').length;
+  const teamAnomalies = anomalies.filter((item) => team.some((member) => member.id === item.userId) && item.isAnomaly);
+  const avgProgress = teamGoals.length ? teamGoals.reduce((sum, goal) => sum + (goal.checkIns?.[0]?.progressScore ?? 0), 0) / teamGoals.length : 0;
+  const topRisk = flightRisk?.employees.slice(0, 3) ?? [];
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <PageHeader title="Manager Dashboard" subtitle="Team overview and pending actions"/>
+      <PageHeader title="Manager Dashboard" subtitle="Team overview, retention risk, and pending actions" />
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard title="Team Size" value={team.length} icon={<Users size={18}/>} color="brand"/>
-        <StatCard title="Pending Approvals" value={pending} icon={<ClipboardCheck size={18}/>} color="warning"/>
-        <StatCard title="Team Avg Progress" value={`${avgProgress.toFixed(0)}%`} icon={<TrendingUp size={18}/>} color="success"/>
-        <StatCard title="Anomalies Flagged" value={teamAnomalies.length} icon={<AlertTriangle size={18}/>} color="danger"/>
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+        <StatCard title="Team Size" value={team.length} icon={<Users size={18} />} color="brand" />
+        <StatCard title="Pending Approvals" value={pending} icon={<ClipboardCheck size={18} />} color="warning" />
+        <StatCard title="Team Avg Progress" value={`${avgProgress.toFixed(0)}%`} icon={<TrendingUp size={18} />} color="success" />
+        <StatCard title="At-Risk Employees" value={flightRisk?.summary.high ?? 0} icon={<AlertTriangle size={18} />} color="danger" />
       </div>
 
-      {teamSentiment && (
-        <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+      {teamSentiment ? (
+        <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
           <div className="card p-4">
-            <p className="text-xs uppercase tracking-wide text-slate-400 mb-1">Team Sentiment</p>
+            <p className="mb-1 text-xs uppercase tracking-wide text-slate-400">Team Sentiment</p>
             <p className={`text-3xl font-display font-bold ${teamSentiment.latestAverage <= -0.15 ? 'text-danger-400' : teamSentiment.latestAverage < 0.1 ? 'text-warning-400' : 'text-success-400'}`}>
               {teamSentiment.latestAverage.toFixed(2)}
             </p>
           </div>
           <div className="card p-4">
-            <p className="text-xs uppercase tracking-wide text-slate-400 mb-1">Engagement Score</p>
+            <p className="mb-1 text-xs uppercase tracking-wide text-slate-400">Engagement Score</p>
             <p className="text-3xl font-display font-bold text-brand-400">{teamSentiment.engagementScore.toFixed(0)}%</p>
           </div>
           <div className="card p-4">
-            <p className="text-xs uppercase tracking-wide text-slate-400 mb-1">Active Alerts</p>
-            <p className="text-3xl font-display font-bold text-slate-800 dark:text-white">{teamSentiment.alertFlags.length}</p>
+            <p className="mb-1 text-xs uppercase tracking-wide text-slate-400">Flight Risk Mix</p>
+            <p className="text-lg font-semibold text-white">High {flightRisk?.summary.high ?? 0} · Medium {flightRisk?.summary.medium ?? 0} · Low {flightRisk?.summary.low ?? 0}</p>
           </div>
         </div>
-      )}
+      ) : null}
 
       {teamSentiment?.alertFlags?.length ? (
-        <div className="rounded-2xl bg-danger-500/10 border border-danger-500/20 px-5 py-4">
-          <p className="text-sm font-semibold text-danger-300 mb-1">Burnout watchlist</p>
+        <div className="rounded-2xl border border-danger-500/20 bg-danger-500/10 px-5 py-4">
+          <p className="mb-1 text-sm font-semibold text-danger-300">Burnout watchlist</p>
           {teamSentiment.alertFlags.map((flag) => (
             <p key={flag} className="text-sm text-danger-200">{flag}</p>
           ))}
         </div>
       ) : null}
 
-      {teamAnomalies.length > 0 && (
-        <div className="card p-5">
-          <h2 className="font-semibold text-slate-800 dark:text-white mb-3 flex items-center gap-2">
-            <AlertTriangle size={16} className="text-danger-400"/> Anomaly Alerts
-          </h2>
-          <div className="space-y-2">
-            {teamAnomalies.map((a) => (
-              <div key={a.userId} className="flex items-center gap-3 p-3 rounded-xl bg-danger-500/10 border border-danger-500/20">
-                <div className="w-8 h-8 rounded-full bg-danger-500/20 flex items-center justify-center text-danger-400 font-bold text-sm">{a.userName?.charAt(0) ?? '?'}</div>
-                <div>
-                  <p className="text-sm font-semibold text-slate-800 dark:text-white">{a.userName}</p>
-                  <p className="text-xs text-slate-400">{a.reason}</p>
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+        <div className="card overflow-hidden p-0">
+          <div className="flex items-center justify-between border-b border-surface-100 px-5 py-4 dark:border-surface-800">
+            <h2 className="font-semibold text-slate-800 dark:text-white">Flight Risk Predictor</h2>
+            <Link to="/manager/analytics" className="text-xs font-medium text-brand-500">Open analytics</Link>
+          </div>
+          <div className="space-y-3 p-4">
+            {topRisk.length === 0 ? (
+              <p className="py-6 text-center text-sm text-slate-400">No flight-risk data available yet.</p>
+            ) : (
+              topRisk.map((person) => (
+                <div key={person.userId} className="rounded-2xl border border-surface-100 p-4 dark:border-surface-800">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="font-semibold text-slate-800 dark:text-white">{person.userName}</p>
+                      <p className="text-xs text-slate-400">{person.jobTitle} · {person.department}</p>
+                    </div>
+                    <span className={`rounded-full px-3 py-1 text-xs font-semibold ${person.riskLevel === 'HIGH' ? 'bg-danger-500/15 text-danger-300' : person.riskLevel === 'MEDIUM' ? 'bg-warning-500/15 text-warning-300' : 'bg-success-500/15 text-success-300'}`}>
+                      {person.riskLevel} · {person.riskScore}
+                    </span>
+                  </div>
+                  <div className="mt-3">
+                    <ProgressBar value={person.riskScore} size="sm" />
+                  </div>
+                  <p className="mt-3 text-xs text-slate-400">{person.reasons[0]}</p>
                 </div>
-                <span className="ml-auto text-xs font-bold text-danger-400">Score: {a.anomalyScore.toFixed(2)}</span>
-              </div>
-            ))}
+              ))
+            )}
           </div>
         </div>
-      )}
 
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-        {/* Pending approvals */}
-        <div className="card p-0 overflow-hidden">
-          <div className="px-5 py-4 border-b border-surface-100 dark:border-surface-800 flex items-center justify-between">
+        <div className="card overflow-hidden p-0">
+          <div className="flex items-center justify-between border-b border-surface-100 px-5 py-4 dark:border-surface-800">
             <h2 className="font-semibold text-slate-800 dark:text-white">Pending Approvals</h2>
-            <Link to="/manager/approvals" className="text-xs text-brand-500 font-medium">View all</Link>
+            <Link to="/manager/approvals" className="text-xs font-medium text-brand-500">View all</Link>
           </div>
           {pending === 0 ? (
-            <p className="text-sm text-slate-400 text-center py-8">No pending approvals 🎉</p>
+            <p className="py-8 text-center text-sm text-slate-400">No pending approvals</p>
           ) : (
             <div className="divide-y divide-surface-100 dark:divide-surface-800">
-              {teamGoals.filter((g) => g.status === 'SUBMITTED').slice(0, 5).map((g) => (
-                <div key={g.id} className="px-5 py-3 flex items-center gap-3">
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-slate-800 dark:text-white truncate">{g.title}</p>
-                    <p className="text-xs text-slate-400">{g.user?.name} · {g.weightage}%</p>
+              {teamGoals.filter((goal) => goal.status === 'SUBMITTED').slice(0, 5).map((goal) => (
+                <div key={goal.id} className="flex items-center gap-3 px-5 py-3">
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium text-slate-800 dark:text-white">{goal.title}</p>
+                    <p className="text-xs text-slate-400">{goal.user?.name} · {goal.weightage}%</p>
                   </div>
-                  <StatusBadge status={g.status}/>
+                  <StatusBadge status={goal.status} />
                 </div>
               ))}
             </div>
           )}
         </div>
-
-        {/* Team heatmap */}
-        <div className="card p-0 overflow-hidden">
-          <div className="px-5 py-4 border-b border-surface-100 dark:border-surface-800">
-            <h2 className="font-semibold text-slate-800 dark:text-white">Team Progress</h2>
-          </div>
-          <div className="p-4 space-y-3">
-            {team.map((member) => {
-              const memberGoals = teamGoals.filter((g) => g.userId === member.id);
-              const avg = memberGoals.length ? memberGoals.reduce((s, g) => s + (g.checkIns?.[0]?.progressScore ?? 0), 0) / memberGoals.length : 0;
-              return (
-                <div key={member.id} className="flex items-center gap-3">
-                  <div className="w-7 h-7 rounded-full bg-brand-600 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">{member.name?.charAt(0) ?? '?'}</div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between mb-1">
-                      <p className="text-xs font-medium text-slate-700 dark:text-slate-200 truncate">{member.name}</p>
-                      <span className="text-xs font-bold text-brand-400 ml-2">{avg.toFixed(0)}%</span>
-                    </div>
-                    <ProgressBar value={avg} size="sm"/>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
       </div>
 
-      <div className="card p-0 overflow-hidden">
-        <div className="px-5 py-4 border-b border-surface-100 dark:border-surface-800">
+      {teamAnomalies.length > 0 ? (
+        <div className="card p-5">
+          <h2 className="mb-3 flex items-center gap-2 font-semibold text-slate-800 dark:text-white">
+            <AlertTriangle size={16} className="text-danger-400" /> Anomaly Alerts
+          </h2>
+          <div className="space-y-2">
+            {teamAnomalies.map((item) => (
+              <div key={item.userId} className="flex items-center gap-3 rounded-xl border border-danger-500/20 bg-danger-500/10 p-3">
+                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-danger-500/20 text-sm font-bold text-danger-400">{item.userName?.charAt(0) ?? '?'}</div>
+                <div>
+                  <p className="text-sm font-semibold text-slate-800 dark:text-white">{item.userName}</p>
+                  <p className="text-xs text-slate-400">{item.reason}</p>
+                </div>
+                <span className="ml-auto text-xs font-bold text-danger-400">Score: {item.anomalyScore.toFixed(2)}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
+      <div className="card overflow-hidden p-0">
+        <div className="border-b border-surface-100 px-5 py-4 dark:border-surface-800">
           <h2 className="font-semibold text-slate-800 dark:text-white">Microsoft Teams Approval Cards</h2>
-          <p className="text-xs text-slate-400 mt-0.5">Demo-ready card payloads generated from employee submissions</p>
+          <p className="mt-0.5 text-xs text-slate-400">Demo-ready card payloads generated from employee submissions</p>
         </div>
         <div className="divide-y divide-surface-100 dark:divide-surface-800">
           {teamCards.length === 0 ? (
-            <p className="text-sm text-slate-400 text-center py-8">No Teams cards generated yet.</p>
+            <p className="py-8 text-center text-sm text-slate-400">No Teams cards generated yet.</p>
           ) : (
             teamCards.slice(0, 4).map((card) => (
               <div key={card.id} className="px-5 py-4">
-                <div className="flex items-center justify-between gap-3 mb-2">
+                <div className="mb-2 flex items-center justify-between gap-3">
                   <p className="font-semibold text-slate-800 dark:text-white">{card.title}</p>
                   <StatusBadge status={card.channel || 'TEAMS'} />
                 </div>

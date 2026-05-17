@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import axios from 'axios';
 import { Role } from '@prisma/client';
 import { buildTeamSentimentSummary } from '../services/sentiment.service';
+import { buildFlightRiskReport } from '../services/risk.service';
 
 const ML_URL = process.env.ML_SERVICE_URL || 'http://localhost:8001';
 const ML_UNAVAILABLE = { error: { code: 'ML_UNAVAILABLE', message: 'AI insights temporarily unavailable.' } };
@@ -53,6 +54,17 @@ export const teamSentiment = async (req: Request, res: Response, next: NextFunct
       req.user?.role === Role.MANAGER && !req.query.managerId ? req.user.id : (req.query.managerId as string | undefined);
     const summary = await buildTeamSentimentSummary(managerId);
     res.json(summary);
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const flightRisk = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const managerId =
+      req.user?.role === Role.MANAGER && !req.query.managerId ? req.user.id : (req.query.managerId as string | undefined);
+    const report = await buildFlightRiskReport(managerId);
+    res.json(report);
   } catch (error) {
     next(error);
   }

@@ -1,6 +1,9 @@
 import { Request, Response, NextFunction } from 'express';
+import { Role } from '@prisma/client';
 import * as aiSvc from '../services/ai.service';
 import { prisma } from '../lib/prisma';
+import { currentUser } from './_helpers';
+import { forbidden } from '../utils/errors';
 
 const AI_UNAVAILABLE = { error: { code: 'AI_UNAVAILABLE', message: 'AI service temporarily unavailable. Please try again later.' } };
 
@@ -74,6 +77,102 @@ export const goalAutopilot = async (req: Request, res: Response, next: NextFunct
 
     const result = await aiSvc.goalAutopilot(jobTitle, req.body.department || req.user?.department);
     res.json(result);
+  } catch (err: any) {
+    if (err?.status === 529 || err?.message?.includes('timeout')) return res.status(503).json(AI_UNAVAILABLE);
+    next(err);
+  }
+};
+
+export const performanceReviewDraft = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const user = currentUser(req);
+    const employeeId = typeof req.body.employeeId === 'string' ? req.body.employeeId : null;
+    if (!employeeId) {
+      return res.status(400).json({ error: { code: 'MISSING_FIELDS', message: 'employeeId is required' } });
+    }
+
+    const employee = await prisma.user.findUnique({
+      where: { id: employeeId },
+      include: {
+        manager: { select: { id: true, name: true } },
+        goals: {
+          include: {
+            checkIns: { orderBy: { createdAt: 'asc' } }
+          },
+          orderBy: { createdAt: 'asc' }
+        },
+        kudosReceived: {
+          include: {
+            sender: { select: { name: true, department: true } },
+            goal: { select: { title: true } }
+          },
+          orderBy: { createdAt: 'desc' }
+        },
+        checkIns: {
+          orderBy: { createdAt: 'asc' }
+        }
+      }
+    });
+
+    if (!employee) {
+      return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Employee not found' } });
+    }
+
+    if (user.role === Role.MANAGER && employee.managerId !== user.id) {
+      throw forbidden('Managers can only draft reviews for their direct reportees');
+    }
+
+    const sentiments = employee.checkIns.map((entry) => entry.sentiment).filter((value): value is number => typeof value === 'number');
+    const goalsCompleted = employee.goals.filter((goal) => goal.status === 'LOCKED' || goal.status === 'APPROVED').length;
+    const averageProgress = employee.goals.length
+      ? employee.goals.reduce((sum, goal) => sum + (goal.checkIns.at(-1)?.progressScore ?? 0), 0) / employee.goals.length
+      : 0;
+
+    const result = await aiSvc.draftPerformanceReview({
+      employeeName: employee.name,
+      managerName: employee.manager?.name,
+      cycleName: employee.goals[0]?.cycleId ?? null,
+      summaryMetrics: {
+        goalsCompleted,
+        averageProgress: Number(averageProgress.toFixed(1)),
+        kudosCount: employee.kudosReceived.length,
+        averageSentiment: sentiments.length
+          ? Number((sentiments.reduce((sum, value) => sum + value, 0) / sentiments.length).toFixed(3))
+          : 0
+      },
+      goals: employee.goals.map((goal) => ({
+        title: goal.title,
+        thrustArea: goal.thrustArea,
+        target: goal.target,
+        status: goal.status,
+        progressScore: goal.checkIns.at(-1)?.progressScore ?? 0,
+        managerComment: goal.managerComment
+      })),
+      checkIns: employee.checkIns.map((entry) => ({
+        quarter: entry.quarter,
+        actualValue: entry.actualValue,
+        status: entry.status,
+        progressScore: entry.progressScore,
+        sentiment: entry.sentiment,
+        employeeNote: entry.employeeNote,
+        managerComment: entry.managerComment
+      })),
+      kudos: employee.kudosReceived.map((entry) => ({
+        badgeType: entry.badgeType,
+        note: entry.note,
+        senderName: entry.sender.name,
+        goalTitle: entry.goal?.title ?? null
+      }))
+    });
+
+    res.json({
+      employee: {
+        id: employee.id,
+        name: employee.name,
+        managerName: employee.manager?.name ?? null
+      },
+      ...result
+    });
   } catch (err: any) {
     if (err?.status === 529 || err?.message?.includes('timeout')) return res.status(503).json(AI_UNAVAILABLE);
     next(err);

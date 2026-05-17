@@ -5,6 +5,7 @@ import type {
   SmartRewriteResponse, ConflictCheckResponse,
   ThrustAreaSuggestion, AnomalyResult, PredictionResult,
   EscalationRule, AuditLog, GoalAutopilotGoal, Kudos, ApprovalDelegation, TeamSentimentSummary, LeaderboardRow,
+  PerformanceReviewDraftResponse, FlightRiskReport, ExternalSyncResult, ChatOpsResponse,
 } from '@/types';
 
 // ─── Auth ─────────────────────────────────────────────────────────────────────
@@ -112,6 +113,8 @@ export const aiService = {
     api.post('/ai/conversational-checkin', { goalId, quarter, messages }).then((r: any) => r.data),
   goalSummary: (employeeId: string) =>
     api.post('/ai/goal-summary', { employeeId }).then((r: any) => r.data as { summary: string }),
+  performanceReview: (employeeId: string) =>
+    api.post('/ai/performance-review', { employeeId }).then((r: any) => r.data as PerformanceReviewDraftResponse),
 };
 
 // ─── ML ───────────────────────────────────────────────────────────────────────
@@ -127,6 +130,8 @@ export const mlService = {
     api.get('/ml/sentiment-trends', { params: { managerId } }).then((r: any) => r.data),
   getTeamSentiment: (managerId?: string) =>
     api.get('/ml/team-sentiment', { params: managerId ? { managerId } : {} }).then((r: any) => r.data as TeamSentimentSummary),
+  getFlightRisk: (managerId?: string) =>
+    api.get('/ml/flight-risk', { params: managerId ? { managerId } : {} }).then((r: any) => r.data as FlightRiskReport),
 };
 
 export const kudosService = {
@@ -145,4 +150,10 @@ export const integrationsService = {
   getTeamsCards: (managerId: string) => api.get(`/integrations/teams/cards/${managerId}`).then((r: any) => r.data.cards as Notification[]),
   submitTeamsAction: (decision: 'approve' | 'reject', token: string, comment?: string) =>
     api.post(`/integrations/teams/actions/${decision}`, { token, comment }).then((r: any) => r.data.goal as Goal),
+  simulateExternalSync: (
+    provider: 'jira' | 'github',
+    payload: { goalId: string; incrementBy?: number; actualValue?: number; quarter?: string; status?: string; eventTitle?: string; note?: string }
+  ) => api.post(`/integrations/sync/${provider}`, payload).then((r: any) => r.data as ExternalSyncResult),
+  chatopsCommand: (platform: 'teams' | 'slack', command: string, quarter?: string) =>
+    api.post('/integrations/chatops/command', { platform, command, quarter }).then((r: any) => r.data as ChatOpsResponse),
 };

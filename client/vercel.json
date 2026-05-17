@@ -1,0 +1,10 @@
+{
+  "buildCommand": "npm run build",
+  "outputDirectory": "./dist",
+  "devCommand": "npm run dev",
+  "env": [
+    "VITE_API_URL",
+    "VITE_ML_API_URL",
+    "VITE_APP_NAME"
+  ]
+}

@@ -4,7 +4,7 @@ import type {
   Goal, CheckIn, Cycle, User, Notification,
   SmartRewriteResponse, ConflictCheckResponse,
   ThrustAreaSuggestion, AnomalyResult, PredictionResult,
-  EscalationRule, AuditLog,
+  EscalationRule, AuditLog, GoalAutopilotGoal, Kudos, ApprovalDelegation, TeamSentimentSummary, LeaderboardRow,
 } from '@/types';
 
 // ─── Auth ─────────────────────────────────────────────────────────────────────
@@ -13,11 +13,14 @@ export const authService = {
   refresh: (token: string) => api.post('/auth/refresh', { refreshToken: token }).then((r: any) => r.data),
   logout: () => api.post('/auth/logout'),
   me: () => api.get('/auth/me').then((r: any) => r.data.user as User),
+  getMicrosoftProfiles: () => api.get('/auth/microsoft/start').then((r: any) => r.data),
+  loginWithMicrosoftDemo: (email: string) => api.get('/auth/microsoft/callback', { params: { email } }).then((r: any) => r.data),
 };
 
 // ─── Users ────────────────────────────────────────────────────────────────────
 export const usersService = {
   getAll: () => api.get('/users').then((r: any) => r.data.users as User[]),
+  getManagers: () => api.get('/users/managers').then((r: any) => r.data.users as User[]),
   getTeam: (managerId: string) => api.get(`/users/team/${managerId}`).then((r: any) => r.data.users as User[]),
   getById: (id: string) => api.get(`/users/${id}`).then((r: any) => r.data.user as User),
   create: (data: Partial<User> & { password?: string }) => api.post('/users', data).then((r: any) => r.data.user),
@@ -47,6 +50,8 @@ export const goalsService = {
   reject: (id: string, comment: string) => api.post(`/goals/${id}/reject`, { comment }).then((r: any) => r.data.goal),
   lock: (id: string) => api.post(`/goals/${id}/lock`).then((r: any) => r.data.goal),
   unlock: (id: string) => api.post(`/goals/${id}/unlock`).then((r: any) => r.data.goal),
+  importPortfolio: (goals: GoalAutopilotGoal[]) =>
+    api.post('/goals/portfolio/import', { goals }).then((r: any) => r.data.goals as Goal[]),
   pushShared: (data: { userIds: string[]; [key: string]: any }) => {
     const { userIds, ...rest } = data;
     return api.post('/goals/shared', { ...rest, employeeIds: userIds }).then((r: any) => r.data.goals);
@@ -65,6 +70,8 @@ export const reportsService = {
   getAchievement: () => api.get('/reports/achievement').then((r: any) => r.data.report || []),
   getCompletionDashboard: () => api.get('/reports/completion').then((r: any) => r.data.report || []),
   getDepartmentSummary: () => api.get('/reports/completion').then((r: any) => r.data.report || []),
+  getLeaderboards: () => api.get('/reports/leaderboards').then((r: any) => r.data as { leaderboard: LeaderboardRow[]; engagementScore: number; alertFlags: string[] }),
+  exportDossier: (userId: string) => api.get(`/reports/dossier/${userId}`, { responseType: 'blob' }).then((r: any) => r.data as Blob),
   exportAchievement: (format: 'csv' | 'excel') =>
     api.get(`/reports/achievement/export`, { params: { format }, responseType: 'blob' }).then((r: any) => r.data as Blob),
 };
@@ -95,6 +102,8 @@ export const escalationsService = {
 export const aiService = {
   smartRewrite: (thrustArea: string, title: string, description: string) =>
     api.post('/ai/smart-rewrite', { thrustArea, title, description }).then((r: any) => r.data as SmartRewriteResponse),
+  goalAutopilot: (jobTitle: string, department?: string) =>
+    api.post('/ai/goal-autopilot', { jobTitle, department }).then((r: any) => r.data as { goals: GoalAutopilotGoal[] }),
   conflictCheck: (goals: Partial<Goal>[]) =>
     api.post('/ai/conflict-check', { goals }).then((r: any) => r.data as ConflictCheckResponse),
   suggestWeightage: (goals: Partial<Goal>[], thrustAreas: string[]) =>
@@ -116,4 +125,24 @@ export const mlService = {
     api.post('/ml/suggest-thrust-area', { title, description }).then((r: any) => r.data as ThrustAreaSuggestion),
   getSentimentTrends: (managerId: string) =>
     api.get('/ml/sentiment-trends', { params: { managerId } }).then((r: any) => r.data),
+  getTeamSentiment: (managerId?: string) =>
+    api.get('/ml/team-sentiment', { params: managerId ? { managerId } : {} }).then((r: any) => r.data as TeamSentimentSummary),
+};
+
+export const kudosService = {
+  getAll: (receiverId?: string) => api.get('/kudos', { params: receiverId ? { receiverId } : {} }).then((r: any) => r.data.kudos as Kudos[]),
+  create: (data: { receiverId: string; goalId?: string; badgeType: Kudos['badgeType']; note: string }) =>
+    api.post('/kudos', data).then((r: any) => r.data.kudos as Kudos),
+};
+
+export const delegationsService = {
+  getAll: () => api.get('/delegations').then((r: any) => r.data.delegations as ApprovalDelegation[]),
+  create: (data: { delegatorManagerId?: string; delegateManagerId: string; startsAt: string; endsAt: string; reason: string }) =>
+    api.post('/delegations', data).then((r: any) => r.data.delegation as ApprovalDelegation),
+};
+
+export const integrationsService = {
+  getTeamsCards: (managerId: string) => api.get(`/integrations/teams/cards/${managerId}`).then((r: any) => r.data.cards as Notification[]),
+  submitTeamsAction: (decision: 'approve' | 'reject', token: string, comment?: string) =>
+    api.post(`/integrations/teams/actions/${decision}`, { token, comment }).then((r: any) => r.data.goal as Goal),
 };

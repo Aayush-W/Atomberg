@@ -37,6 +37,7 @@ export async function requireAuth(req: Request, _res: Response, next: NextFuncti
       name: user.name,
       role: user.role,
       department: user.department,
+      jobTitle: user.jobTitle,
       managerId: user.managerId
     };
     next();

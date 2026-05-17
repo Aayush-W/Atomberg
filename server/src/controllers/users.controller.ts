@@ -31,7 +31,7 @@ function limitUpdateForNonAdmin(req: Request, targetUserId: string, input: Updat
     throw forbidden('Only admins can update other users');
   }
 
-  const allowedKeys: Array<keyof UpdateUserInput> = ['name', 'password'];
+  const allowedKeys: Array<keyof UpdateUserInput> = ['name', 'password', 'jobTitle'];
   const blockedKeys = Object.keys(input).filter((key) => !allowedKeys.includes(key as keyof UpdateUserInput));
   if (blockedKeys.length > 0) {
     throw forbidden('Only admins can update email, role, department, or manager');
@@ -74,6 +74,14 @@ export const getTeam = asyncHandler(async (req: Request<{ managerId: string }>, 
   res.json({ users: sanitizeUsers(users) });
 });
 
+export const listManagers = asyncHandler(async (_req: Request, res: Response) => {
+  const users = await prisma.user.findMany({
+    where: { role: Role.MANAGER },
+    orderBy: { name: 'asc' }
+  });
+  res.json({ users: sanitizeUsers(users) });
+});
+
 export const createUser = asyncHandler(async (req: Request<unknown, unknown, CreateUserInput>, res: Response) => {
   const hashedPassword = await bcrypt.hash(req.body.password, 10);
   const user = await prisma.user.create({
@@ -83,6 +91,7 @@ export const createUser = asyncHandler(async (req: Request<unknown, unknown, Cre
       password: hashedPassword,
       role: req.body.role,
       department: req.body.department,
+      jobTitle: req.body.jobTitle,
       managerId: req.body.managerId ?? null
     }
   });
@@ -99,6 +108,7 @@ export const updateUser = asyncHandler(
     if (input.email !== undefined) data.email = input.email;
     if (input.role !== undefined) data.role = input.role;
     if (input.department !== undefined) data.department = input.department;
+    if (input.jobTitle !== undefined) data.jobTitle = input.jobTitle;
     if (input.managerId !== undefined) data.managerId = input.managerId;
     if (input.password !== undefined) data.password = await bcrypt.hash(input.password, 10);
 

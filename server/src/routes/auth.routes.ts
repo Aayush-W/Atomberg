@@ -9,4 +9,6 @@ export const authRouter = Router();
 authRouter.post('/login', validate(loginSchema), authController.login);
 authRouter.post('/refresh', validate(refreshSchema), authController.refresh);
 authRouter.post('/logout', authController.logout);
+authRouter.get('/microsoft/start', authController.microsoftStart);
+authRouter.get('/microsoft/callback', authController.microsoftCallback);
 authRouter.get('/me', requireAuth, authController.me);

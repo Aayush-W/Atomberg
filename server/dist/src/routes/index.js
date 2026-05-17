@@ -13,6 +13,9 @@ const notifications_routes_1 = require("./notifications.routes");
 const escalations_routes_1 = require("./escalations.routes");
 const ai_routes_1 = require("./ai.routes");
 const ml_routes_1 = require("./ml.routes");
+const kudos_routes_1 = require("./kudos.routes");
+const delegations_routes_1 = require("./delegations.routes");
+const integrations_routes_1 = require("./integrations.routes");
 exports.apiRouter = (0, express_1.Router)();
 exports.apiRouter.use('/auth', auth_routes_1.authRouter);
 exports.apiRouter.use('/users', users_routes_1.usersRouter);
@@ -25,3 +28,6 @@ exports.apiRouter.use('/notifications', notifications_routes_1.notificationsRout
 exports.apiRouter.use('/escalations', escalations_routes_1.escalationsRouter);
 exports.apiRouter.use('/ai', ai_routes_1.aiRouter);
 exports.apiRouter.use('/ml', ml_routes_1.mlRouter);
+exports.apiRouter.use('/kudos', kudos_routes_1.kudosRouter);
+exports.apiRouter.use('/delegations', delegations_routes_1.delegationsRouter);
+exports.apiRouter.use('/integrations', integrations_routes_1.integrationsRouter);

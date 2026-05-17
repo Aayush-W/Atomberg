@@ -45,12 +45,13 @@ const updateRule = async (req, res, next) => {
 exports.updateRule = updateRule;
 const getLog = async (_req, res, next) => {
     try {
-        // Return recent notifications of escalation type
-        const logs = await prisma_1.prisma.notification.findMany({
-            where: { type: { startsWith: 'ESCALATION' } },
+        const logs = await prisma_1.prisma.escalationEvent.findMany({
             orderBy: { createdAt: 'desc' },
             take: 100,
-            include: { user: { select: { name: true, email: true } } },
+            include: {
+                recipientUser: { select: { name: true, email: true } },
+                rule: { select: { name: true, triggerType: true } }
+            }
         });
         res.json(logs);
     }

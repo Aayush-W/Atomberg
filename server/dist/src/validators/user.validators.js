@@ -15,6 +15,7 @@ exports.createUserSchema = zod_1.z.object({
     password: zod_1.z.string().min(8),
     role: zod_1.z.nativeEnum(client_1.Role),
     department: zod_1.z.string().trim().min(2),
+    jobTitle: zod_1.z.string().trim().min(2).optional(),
     managerId: zod_1.z.string().uuid().nullable().optional()
 });
 exports.updateUserSchema = zod_1.z
@@ -24,6 +25,7 @@ exports.updateUserSchema = zod_1.z
     password: zod_1.z.string().min(8).optional(),
     role: zod_1.z.nativeEnum(client_1.Role).optional(),
     department: zod_1.z.string().trim().min(2).optional(),
+    jobTitle: zod_1.z.string().trim().min(2).optional(),
     managerId: zod_1.z.string().uuid().nullable().optional()
 })
     .refine((value) => Object.keys(value).length > 0, {

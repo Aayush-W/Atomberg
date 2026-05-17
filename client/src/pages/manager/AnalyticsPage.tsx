@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { useAuthStore } from '@/stores/authStore';
-import { goalsService, usersService, mlService } from '@/services/services';
+import { goalsService, usersService, mlService, reportsService } from '@/services/services';
 import { PageHeader, Spinner, ErrorState, StatusBadge, ProgressBar } from '@/components/common';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, PieChart, Pie, Cell, BarChart, Bar, Legend } from 'recharts';
 
@@ -18,6 +18,15 @@ export default function ManagerAnalytics() {
     queryKey: ['sentiment-trends', user?.id], 
     queryFn: () => mlService.getSentimentTrends(user?.id ?? ''),
     enabled: !!user?.id
+  });
+  const { data: sentimentSummary } = useQuery({
+    queryKey: ['team-sentiment', user?.id],
+    queryFn: () => mlService.getTeamSentiment(user?.id),
+    enabled: !!user?.id
+  });
+  const { data: leaderboardData } = useQuery({
+    queryKey: ['leaderboards'],
+    queryFn: reportsService.getLeaderboards,
   });
 
   if (!user || isLoading) return <div className="flex items-center justify-center h-64"><Spinner size={32}/></div>;
@@ -119,6 +128,42 @@ export default function ManagerAnalytics() {
           </div>
         </div>
       </div>
+
+      {sentimentSummary && (
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+          <div className="card p-5">
+            <h3 className="font-semibold text-slate-800 dark:text-white mb-4">Burnout Risk Buckets</h3>
+            <div className="grid grid-cols-3 gap-3">
+              <div className="rounded-xl bg-danger-500/10 p-4 text-center">
+                <p className="text-xs text-slate-400">High</p>
+                <p className="text-2xl font-display font-bold text-danger-400">{sentimentSummary.burnoutRisk.high}</p>
+              </div>
+              <div className="rounded-xl bg-warning-500/10 p-4 text-center">
+                <p className="text-xs text-slate-400">Medium</p>
+                <p className="text-2xl font-display font-bold text-warning-400">{sentimentSummary.burnoutRisk.medium}</p>
+              </div>
+              <div className="rounded-xl bg-success-500/10 p-4 text-center">
+                <p className="text-xs text-slate-400">Low</p>
+                <p className="text-2xl font-display font-bold text-success-400">{sentimentSummary.burnoutRisk.low}</p>
+              </div>
+            </div>
+          </div>
+          <div className="card p-5">
+            <h3 className="font-semibold text-slate-800 dark:text-white mb-4">Department Leaderboards</h3>
+            <div className="space-y-3">
+              {(leaderboardData?.leaderboard || []).map((row) => (
+                <div key={row.department} className="rounded-xl border border-surface-200 dark:border-surface-800 p-3">
+                  <div className="flex items-center justify-between gap-3 mb-2">
+                    <p className="font-semibold text-slate-800 dark:text-white">{row.department}</p>
+                    <span className="text-xs font-bold text-brand-400">{row.onTimeCompliance.toFixed(0)}% on-time</span>
+                  </div>
+                  <p className="text-xs text-slate-500">Avg progress {row.averageProgress.toFixed(0)}% · Kudos {row.kudosEarned} · Healthy sentiment {row.healthySentimentRate.toFixed(0)}%</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

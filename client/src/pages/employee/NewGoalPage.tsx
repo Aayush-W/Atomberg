@@ -8,7 +8,8 @@ import { Sparkles, Loader2, Check, AlertCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { goalsService, aiService, mlService } from '@/services/services';
 import { PageHeader } from '@/components/common';
-import type { UoMType, SmartRewriteResponse, ThrustAreaSuggestion } from '@/types';
+import { useAuthStore } from '@/stores/authStore';
+import type { UoMType, SmartRewriteResponse, ThrustAreaSuggestion, GoalAutopilotGoal, GoalSensitivity } from '@/types';
 
 const THRUST_AREAS = ['Innovation', 'Revenue Growth', 'Operational Excellence'];
 const UOM_TYPES: UoMType[] = ['MIN', 'MAX', 'TIMELINE', 'ZERO'];
@@ -20,6 +21,7 @@ const UOM_TOOLTIPS: Record<UoMType, string> = {
 };
 const SMART_LABELS = ['Specific', 'Measurable', 'Achievable', 'Relevant', 'Time-Bound'];
 const SMART_KEYS = ['specific', 'measurable', 'achievable', 'relevant', 'timeBound'] as const;
+const SENSITIVITIES: GoalSensitivity[] = ['NORMAL', 'TECHNICAL', 'FINANCIAL'];
 
 const schema = z.object({
   thrustArea: z.string().min(1),
@@ -29,22 +31,26 @@ const schema = z.object({
   target: z.number().positive().optional(),
   targetDate: z.string().optional(),
   weightage: z.number().min(10).max(80),
+  sensitivity: z.enum(['NORMAL', 'TECHNICAL', 'FINANCIAL']).default('NORMAL'),
 });
 type FormData = z.infer<typeof schema>;
 
 export default function NewGoalPage() {
+  const user = useAuthStore((s) => s.user);
   const navigate = useNavigate();
   const qc = useQueryClient();
   const [smartData, setSmartData] = useState<SmartRewriteResponse | null>(null);
   const [thrustHint, setThrustHint] = useState<ThrustAreaSuggestion | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
+  const [autopilotGoals, setAutopilotGoals] = useState<GoalAutopilotGoal[]>([]);
+  const [autopilotLoading, setAutopilotLoading] = useState(false);
 
   const { data: existingGoals = [] } = useQuery({ queryKey: ['my-goals'], queryFn: goalsService.getMine });
   const currentTotal = existingGoals.reduce((s, g) => s + g.weightage, 0);
 
   const { register, handleSubmit, watch, setValue, formState: { errors, isSubmitting } } = useForm<FormData>({
     resolver: zodResolver(schema),
-    defaultValues: { uomType: 'MIN', weightage: 20 },
+    defaultValues: { uomType: 'MIN', weightage: 20, sensitivity: 'NORMAL' },
   });
 
   const [title, description, thrustArea, uomType, weightage] = watch(['title', 'description', 'thrustArea', 'uomType', 'weightage']);
@@ -74,6 +80,31 @@ export default function NewGoalPage() {
     mutationFn: (data: FormData) => goalsService.create({ ...data, target: uomType === 'ZERO' ? 0 : data.target }),
     onSuccess: () => { toast.success('Goal created!'); qc.invalidateQueries({ queryKey: ['my-goals'] }); navigate('/employee/goals'); },
     onError: (e: any) => toast.error(e?.response?.data?.error?.message ?? 'Failed to create goal'),
+  });
+
+  const autopilotMut = useMutation({
+    mutationFn: async () => {
+      if (!user?.jobTitle) throw new Error('Add your job title to use Goal Autopilot');
+      const res = await aiService.goalAutopilot(user.jobTitle, user.department);
+      return res.goals;
+    },
+    onMutate: () => setAutopilotLoading(true),
+    onSuccess: (goals) => {
+      setAutopilotGoals(goals);
+      toast.success('Goal Autopilot generated a 5-goal portfolio');
+    },
+    onError: (error: any) => toast.error(error?.message ?? 'Goal Autopilot is unavailable'),
+    onSettled: () => setAutopilotLoading(false),
+  });
+
+  const importMut = useMutation({
+    mutationFn: (goals: GoalAutopilotGoal[]) => goalsService.importPortfolio(goals),
+    onSuccess: () => {
+      toast.success('Autopilot portfolio imported');
+      qc.invalidateQueries({ queryKey: ['my-goals'] });
+      navigate('/employee/goals');
+    },
+    onError: (error: any) => toast.error(error?.response?.data?.error?.message ?? 'Portfolio import failed'),
   });
 
   const newTotal = currentTotal + (weightage || 0);
@@ -142,6 +173,13 @@ export default function NewGoalPage() {
               </p>
             </div>
           </div>
+          <div>
+            <label className="label">Sensitivity</label>
+            <select {...register('sensitivity')} className="input">
+              {SENSITIVITIES.map((option) => <option key={option}>{option}</option>)}
+            </select>
+            <p className="text-xs text-slate-400 mt-1">Admins see technical and financial goals in masked form on analytics exports.</p>
+          </div>
           <div className="flex justify-end gap-3 pt-2 border-t border-surface-100 dark:border-surface-800">
             <button type="button" onClick={() => navigate('/employee/goals')} className="btn-secondary btn">Cancel</button>
             <button type="submit" disabled={isSubmitting || createMut.isPending} className="btn-primary btn">
@@ -157,6 +195,14 @@ export default function NewGoalPage() {
             <h3 className="font-semibold text-slate-800 dark:text-white text-sm">AI SMART Coach</h3>
             {aiLoading && <Loader2 size={14} className="animate-spin text-brand-400 ml-auto"/>}
           </div>
+          <button
+            type="button"
+            onClick={() => autopilotMut.mutate()}
+            disabled={autopilotLoading || importMut.isPending}
+            className="btn-secondary btn btn-sm w-full mb-4"
+          >
+            {autopilotLoading ? 'Generating Goal Autopilot…' : `Generate Goal Autopilot${user?.jobTitle ? ` for ${user.jobTitle}` : ''}`}
+          </button>
           {!smartData && !aiLoading && <p className="text-xs text-slate-400">Type your title and description — AI suggestions appear here.</p>}
           {smartData && (
             <div className="space-y-4">
@@ -188,6 +234,34 @@ export default function NewGoalPage() {
                   ))}
                 </div>
               )}
+            </div>
+          )}
+          {autopilotGoals.length > 0 && (
+            <div className="mt-5 border-t border-surface-200 dark:border-surface-800 pt-4 space-y-3">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Goal Autopilot</p>
+                  <p className="text-xs text-slate-500">{autopilotGoals.length} goals · {autopilotGoals.reduce((sum, goal) => sum + goal.weightage, 0)}% total weight</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => importMut.mutate(autopilotGoals)}
+                  disabled={importMut.isPending}
+                  className="btn-primary btn btn-sm"
+                >
+                  {importMut.isPending ? 'Importing…' : 'Import Portfolio'}
+                </button>
+              </div>
+              {autopilotGoals.map((goal, index) => (
+                <div key={`${goal.title}-${index}`} className="rounded-xl border border-surface-200 dark:border-surface-800 p-3">
+                  <div className="flex items-center justify-between gap-3 mb-1">
+                    <p className="text-sm font-semibold text-slate-800 dark:text-white">{goal.title}</p>
+                    <span className="text-xs font-bold text-brand-400">{goal.weightage}%</span>
+                  </div>
+                  <p className="text-xs text-slate-500 mb-1">{goal.thrustArea} · {goal.uomType} · Target {goal.target}</p>
+                  <p className="text-xs text-slate-400 leading-relaxed">{goal.rationale}</p>
+                </div>
+              ))}
             </div>
           )}
         </div>

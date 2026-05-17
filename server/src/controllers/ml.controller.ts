@@ -1,5 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import axios from 'axios';
+import { Role } from '@prisma/client';
+import { buildTeamSentimentSummary } from '../services/sentiment.service';
 
 const ML_URL = process.env.ML_SERVICE_URL || 'http://localhost:8001';
 const ML_UNAVAILABLE = { error: { code: 'ML_UNAVAILABLE', message: 'AI insights temporarily unavailable.' } };
@@ -38,7 +40,20 @@ export const suggestThrustArea = async (req: Request, res: Response, next: NextF
 
 export const sentimentTrends = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { data } = await axios.get(`${ML_URL}/sentiment-trends`, { params: req.query, timeout: 10000 });
-    res.json(data);
+    const managerId =
+      req.user?.role === Role.MANAGER && !req.query.managerId ? req.user.id : (req.query.managerId as string | undefined);
+    const summary = await buildTeamSentimentSummary(managerId);
+    res.json({ trends: summary.trends });
   } catch { res.status(503).json(ML_UNAVAILABLE); }
+};
+
+export const teamSentiment = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const managerId =
+      req.user?.role === Role.MANAGER && !req.query.managerId ? req.user.id : (req.query.managerId as string | undefined);
+    const summary = await buildTeamSentimentSummary(managerId);
+    res.json(summary);
+  } catch (error) {
+    next(error);
+  }
 };

@@ -1,0 +1,10 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.integrationsRouter = void 0;
+const express_1 = require("express");
+const auth_middleware_1 = require("../middleware/auth.middleware");
+const integrations_controller_1 = require("../controllers/integrations.controller");
+exports.integrationsRouter = (0, express_1.Router)();
+exports.integrationsRouter.use(auth_middleware_1.requireAuth);
+exports.integrationsRouter.get('/teams/cards/:managerId', integrations_controller_1.getTeamsCards);
+exports.integrationsRouter.post('/teams/actions/:decision', integrations_controller_1.handleTeamsAction);

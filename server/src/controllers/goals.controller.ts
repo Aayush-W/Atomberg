@@ -1,9 +1,10 @@
-import { Goal, GoalStatus, Prisma, Role } from '@prisma/client';
+import { Goal, GoalStatus, NotificationChannel, Prisma, Role } from '@prisma/client';
 import { Request, Response } from 'express';
 import { prisma } from '../lib/prisma';
 import { AuthUser } from '../types/auth';
 import { asyncHandler } from '../utils/asyncHandler';
 import { badRequest, forbidden, unauthorized } from '../utils/errors';
+import { createNotification } from './notifications.controller';
 import {
   ApproveGoalInput,
   CreateGoalInput,
@@ -23,6 +24,8 @@ import {
   ensureUserCanAccessGoal,
   getActiveCycleOrThrow
 } from '../services/goalRules.service';
+import { refreshGoalConflictAlerts } from '../services/goalConflict.service';
+import { buildAdaptiveGoalApprovalCard } from '../services/teams.service';
 
 const goalInclude = {
   user: {
@@ -36,8 +39,11 @@ const goalInclude = {
   },
   cycle: true,
   checkIns: true,
+  kudos: true,
   dependencies: true,
-  dependents: true
+  dependents: true,
+  conflictAlertsA: true,
+  conflictAlertsB: true
 } satisfies Prisma.GoalInclude;
 
 function currentUser(req: { user?: AuthUser }) {
@@ -88,9 +94,41 @@ function updateGoalData(body: UpdateGoalInput): Prisma.GoalUpdateInput {
   if (body.target !== undefined) data.target = body.target;
   if (body.targetDate !== undefined) data.targetDate = body.targetDate;
   if (body.weightage !== undefined) data.weightage = body.weightage;
+  if (body.sensitivity !== undefined) data.sensitivity = body.sensitivity;
   if (body.qualityScore !== undefined) data.qualityScore = body.qualityScore;
   if (body.qualityFeedback !== undefined) data.qualityFeedback = body.qualityFeedback as Prisma.InputJsonValue;
   return data;
+}
+
+async function refreshDepartmentConflictsForGoal(goal: Goal) {
+  const owner = await prisma.user.findUnique({
+    where: { id: goal.userId },
+    select: { department: true }
+  });
+  if (!owner) {
+    return [];
+  }
+
+  const departmentGoals = await prisma.goal.findMany({
+    where: {
+      cycleId: goal.cycleId,
+      status: { in: [GoalStatus.SUBMITTED, GoalStatus.APPROVED, GoalStatus.LOCKED] },
+      user: { department: owner.department }
+    },
+    select: {
+      id: true,
+      cycleId: true,
+      title: true,
+      description: true,
+      thrustArea: true,
+      target: true,
+      uomType: true,
+      weightage: true,
+      user: { select: { department: true } }
+    }
+  });
+
+  return refreshGoalConflictAlerts(departmentGoals);
 }
 
 export const listOwnGoals = asyncHandler(async (req: Request, res: Response) => {
@@ -151,6 +189,7 @@ export const createGoal = asyncHandler(async (req: Request<unknown, unknown, Cre
       target: req.body.target,
       targetDate: req.body.targetDate,
       weightage: req.body.weightage,
+      sensitivity: req.body.sensitivity,
       qualityScore: req.body.qualityScore,
       qualityFeedback: req.body.qualityFeedback as Prisma.InputJsonValue | undefined
     },
@@ -225,6 +264,24 @@ export const submitGoal = asyncHandler(async (req: Request<{ id: string }>, res:
     newValue: GoalStatus.SUBMITTED
   });
 
+  await refreshDepartmentConflictsForGoal(goal);
+
+  if (goal.user.managerId) {
+    const card = buildAdaptiveGoalApprovalCard(goal as any, goal.user.managerId);
+    await createNotification(
+      goal.user.managerId,
+      'APPROVAL_PENDING',
+      `${goal.user.name} submitted goals for approval`,
+      `Review ${goal.user.name}'s goal "${goal.title}" and approve or reject it from the Teams preview.`,
+      NotificationChannel.TEAMS,
+      {
+        goalId: goal.id,
+        employeeId: goal.user.id,
+        adaptiveCard: card
+      }
+    );
+  }
+
   res.json({ goal });
 });
 
@@ -248,6 +305,7 @@ export const approveGoal = asyncHandler(async (req: Request<{ id: string }, unkn
   });
 
   await auditChangedFields(user.id, before, goal, ['status', 'lockedAt', 'managerComment']);
+  await refreshDepartmentConflictsForGoal(goal);
   res.json({ goal });
 });
 
@@ -270,6 +328,7 @@ export const rejectGoal = asyncHandler(async (req: Request<{ id: string }, unkno
   });
 
   await auditChangedFields(user.id, before, goal, ['status', 'managerComment', 'lockedAt']);
+  await refreshDepartmentConflictsForGoal(goal);
   res.json({ goal });
 });
 
@@ -322,6 +381,7 @@ export const createSharedGoal = asyncHandler(async (req: Request<unknown, unknow
       targetDate: req.body.targetDate,
       weightage: req.body.weightage,
       isShared: false,
+      sensitivity: req.body.sensitivity,
       qualityScore: req.body.qualityScore,
       qualityFeedback: req.body.qualityFeedback as Prisma.InputJsonValue | undefined
     }
@@ -342,6 +402,7 @@ export const createSharedGoal = asyncHandler(async (req: Request<unknown, unknow
           weightage: req.body.weightage,
           isShared: true,
           parentGoalId: parentGoal.id,
+          sensitivity: req.body.sensitivity,
           qualityScore: req.body.qualityScore,
           qualityFeedback: req.body.qualityFeedback as Prisma.InputJsonValue | undefined
         }
@@ -437,6 +498,68 @@ export const addDependency = asyncHandler(async (req: Request<{ id: string }, un
   });
 
   res.status(201).json({ dependency });
+});
+
+export const importGoalPortfolio = asyncHandler(async (req: Request, res: Response) => {
+  const user = currentUser(req);
+  if (user.role !== Role.EMPLOYEE) {
+    throw forbidden('Only employees can import their own portfolio');
+  }
+
+  const goals = Array.isArray(req.body.goals) ? (req.body.goals as CreateGoalInput[]) : [];
+  if (goals.length !== 5) {
+    throw badRequest('Portfolio import expects exactly 5 goals');
+  }
+
+  const cycle = await getActiveCycleOrThrow(req.body.cycleId);
+  const existing = await prisma.goal.findMany({
+    where: { userId: user.id, cycleId: cycle.id }
+  });
+
+  if (existing.some((goal) => goal.status !== GoalStatus.DRAFT && goal.status !== GoalStatus.REJECTED)) {
+    throw badRequest('Portfolio import is only available before any goals are submitted or approved');
+  }
+
+  const totalWeightage = goals.reduce((sum, goal) => sum + goal.weightage, 0);
+  if (Math.abs(totalWeightage - 100) > 0.001) {
+    throw badRequest('Imported goals must sum to exactly 100% weightage');
+  }
+
+  await prisma.$transaction(async (tx) => {
+    await tx.goal.deleteMany({
+      where: { userId: user.id, cycleId: cycle.id, status: { in: [GoalStatus.DRAFT, GoalStatus.REJECTED] } }
+    });
+
+    for (const goal of goals) {
+      ensureGoalWeightage(goal.weightage);
+      await tx.goal.create({
+        data: {
+          userId: user.id,
+          cycleId: cycle.id,
+          thrustArea: goal.thrustArea,
+          title: goal.title,
+          description: goal.description,
+          uomType: goal.uomType,
+          target: goal.target,
+          targetDate: goal.targetDate,
+          weightage: goal.weightage,
+          sensitivity: goal.sensitivity,
+          qualityFeedback: {
+            source: 'goal-autopilot',
+            rationale: (goal as unknown as { rationale?: string }).rationale ?? null
+          }
+        }
+      });
+    }
+  });
+
+  const importedGoals = await prisma.goal.findMany({
+    where: { userId: user.id, cycleId: cycle.id },
+    include: goalInclude,
+    orderBy: { createdAt: 'asc' }
+  });
+
+  res.status(201).json({ goals: importedGoals });
 });
 
 export const getGoal = asyncHandler(async (req: Request<{ id: string }>, res: Response) => {

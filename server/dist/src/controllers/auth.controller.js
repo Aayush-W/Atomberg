@@ -3,13 +3,14 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.me = exports.logout = exports.refresh = exports.login = void 0;
+exports.microsoftCallback = exports.microsoftStart = exports.me = exports.logout = exports.refresh = exports.login = void 0;
 const bcrypt_1 = __importDefault(require("bcrypt"));
 const jsonwebtoken_1 = require("jsonwebtoken");
 const prisma_1 = require("../lib/prisma");
 const asyncHandler_1 = require("../utils/asyncHandler");
 const auth_1 = require("../utils/auth");
 const errors_1 = require("../utils/errors");
+const microsoftDemo_service_1 = require("../services/microsoftDemo.service");
 const refreshCookieName = 'goalforge_refresh_token';
 function setRefreshCookie(res, refreshToken) {
     res.cookie(refreshCookieName, refreshToken, {
@@ -72,4 +73,23 @@ exports.me = (0, asyncHandler_1.asyncHandler)(async (req, res) => {
         throw (0, errors_1.unauthorized)('User no longer exists');
     }
     res.json({ user: (0, auth_1.toPublicUser)(user) });
+});
+exports.microsoftStart = (0, asyncHandler_1.asyncHandler)(async (_req, res) => {
+    res.json({
+        mode: 'demo',
+        profiles: (0, microsoftDemo_service_1.getMicrosoftDemoProfiles)(),
+        callbackBase: '/api/auth/microsoft/callback'
+    });
+});
+exports.microsoftCallback = (0, asyncHandler_1.asyncHandler)(async (req, res) => {
+    const email = typeof req.query.email === 'string' ? req.query.email.toLowerCase() : null;
+    if (!email) {
+        throw (0, errors_1.unauthorized)('Microsoft demo email is required');
+    }
+    const user = await (0, microsoftDemo_service_1.syncMicrosoftDemoUser)(email);
+    const publicUser = (0, auth_1.toPublicUser)(user);
+    const accessToken = (0, auth_1.signAccessToken)(publicUser);
+    const refreshToken = (0, auth_1.signRefreshToken)(publicUser);
+    setRefreshCookie(res, refreshToken);
+    res.json({ accessToken, refreshToken, user: publicUser, provider: 'MICROSOFT_DEMO' });
 });

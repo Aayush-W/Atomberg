@@ -47,6 +47,7 @@ exports.goalsRouter.get('/', goalsController.listOwnGoals);
 exports.goalsRouter.get('/team', (0, role_middleware_1.requireRole)(client_1.Role.MANAGER, client_1.Role.ADMIN), goalsController.listTeamGoals);
 exports.goalsRouter.get('/all', (0, role_middleware_1.requireRole)(client_1.Role.ADMIN), goalsController.listAllGoals);
 exports.goalsRouter.post('/', (0, role_middleware_1.requireRole)(client_1.Role.EMPLOYEE), (0, validate_middleware_1.validate)(goal_validators_1.createGoalSchema), goalsController.createGoal);
+exports.goalsRouter.post('/portfolio/import', (0, role_middleware_1.requireRole)(client_1.Role.EMPLOYEE), (0, validate_middleware_1.validate)(goal_validators_1.importGoalPortfolioSchema), goalsController.importGoalPortfolio);
 exports.goalsRouter.post('/shared', (0, role_middleware_1.requireRole)(client_1.Role.MANAGER, client_1.Role.ADMIN), (0, validate_middleware_1.validate)(goal_validators_1.sharedGoalSchema), goalsController.createSharedGoal);
 exports.goalsRouter.get('/dependency-graph', goalsController.getDependencyGraph);
 exports.goalsRouter.get('/:id/audit', (0, validate_middleware_1.validate)(goal_validators_1.goalIdParamSchema, 'params'), goalsController.getGoalAudit);
@@ -56,4 +57,5 @@ exports.goalsRouter.post('/:id/submit', (0, validate_middleware_1.validate)(goal
 exports.goalsRouter.post('/:id/approve', (0, role_middleware_1.requireRole)(client_1.Role.MANAGER, client_1.Role.ADMIN), (0, validate_middleware_1.validate)(goal_validators_1.goalIdParamSchema, 'params'), (0, validate_middleware_1.validate)(goal_validators_1.approveGoalSchema), goalsController.approveGoal);
 exports.goalsRouter.post('/:id/reject', (0, role_middleware_1.requireRole)(client_1.Role.MANAGER, client_1.Role.ADMIN), (0, validate_middleware_1.validate)(goal_validators_1.goalIdParamSchema, 'params'), (0, validate_middleware_1.validate)(goal_validators_1.rejectGoalSchema), goalsController.rejectGoal);
 exports.goalsRouter.post('/:id/unlock', (0, role_middleware_1.requireRole)(client_1.Role.ADMIN), (0, validate_middleware_1.validate)(goal_validators_1.goalIdParamSchema, 'params'), goalsController.unlockGoal);
+exports.goalsRouter.get('/:id', (0, validate_middleware_1.validate)(goal_validators_1.goalIdParamSchema, 'params'), goalsController.getGoal);
 exports.goalsRouter.post('/:id/dependency', (0, validate_middleware_1.validate)(goal_validators_1.goalIdParamSchema, 'params'), (0, validate_middleware_1.validate)(goal_validators_1.dependencySchema), goalsController.addDependency);

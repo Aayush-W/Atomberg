@@ -33,7 +33,7 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.goalSummary = exports.conversationalCheckin = exports.suggestWeightage = exports.conflictCheck = exports.smartRewrite = void 0;
+exports.goalAutopilot = exports.goalSummary = exports.conversationalCheckin = exports.suggestWeightage = exports.conflictCheck = exports.smartRewrite = void 0;
 const aiSvc = __importStar(require("../services/ai.service"));
 const prisma_1 = require("../lib/prisma");
 const AI_UNAVAILABLE = { error: { code: 'AI_UNAVAILABLE', message: 'AI service temporarily unavailable. Please try again later.' } };
@@ -110,3 +110,19 @@ const goalSummary = async (req, res, next) => {
     }
 };
 exports.goalSummary = goalSummary;
+const goalAutopilot = async (req, res, next) => {
+    try {
+        const jobTitle = req.body.jobTitle || req.user?.jobTitle;
+        if (!jobTitle) {
+            return res.status(400).json({ error: { code: 'MISSING_FIELDS', message: 'jobTitle is required' } });
+        }
+        const result = await aiSvc.goalAutopilot(jobTitle, req.body.department || req.user?.department);
+        res.json(result);
+    }
+    catch (err) {
+        if (err?.status === 529 || err?.message?.includes('timeout'))
+            return res.status(503).json(AI_UNAVAILABLE);
+        next(err);
+    }
+};
+exports.goalAutopilot = goalAutopilot;

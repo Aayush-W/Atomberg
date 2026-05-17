@@ -23,6 +23,7 @@ const ManagerTeam = lazy(() => import('@/pages/manager/TeamPage'));
 const ManagerSharedGoals = lazy(() => import('@/pages/manager/SharedGoalsPage'));
 const ManagerAnalytics = lazy(() => import('@/pages/manager/AnalyticsPage'));
 const DependencyGraph = lazy(() => import('@/pages/manager/DependencyGraphPage'));
+const ManagerDelegations = lazy(() => import('@/pages/manager/DelegationsPage'));
 
 // Admin
 const AdminDashboard = lazy(() => import('@/pages/admin/DashboardPage'));
@@ -181,6 +182,14 @@ export default function App() {
           element={
             <RequireRole roles={['MANAGER', 'ADMIN']}>
               <DependencyGraph />
+            </RequireRole>
+          }
+        />
+        <Route
+          path="manager/delegations"
+          element={
+            <RequireRole roles={['MANAGER', 'ADMIN']}>
+              <ManagerDelegations />
             </RequireRole>
           }
         />

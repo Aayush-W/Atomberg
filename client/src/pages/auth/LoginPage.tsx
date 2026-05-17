@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Eye, EyeOff, Zap } from 'lucide-react';
+import { Eye, EyeOff, MonitorSmartphone, Zap } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { authService } from '@/services/services';
@@ -18,7 +18,7 @@ type FormData = z.infer<typeof schema>;
 const QUICK_LOGINS = [
   { label: 'Admin',      email: 'admin@goalforge.com',     password: 'Admin@123' },
   { label: 'Manager 1',  email: 'manager1@goalforge.com',  password: 'Manager@123' },
-  { label: 'Employee 1', email: 'emp1@goalforge.com',       password: 'Employee@123' },
+  { label: 'Employee 1', email: 'alice@goalforge.com',      password: 'Employee@123' },
 ];
 
 export default function LoginPage() {
@@ -26,22 +26,52 @@ export default function LoginPage() {
     resolver: zodResolver(schema),
   });
   const [showPwd, setShowPwd] = useState(false);
+  const [msLoading, setMsLoading] = useState(false);
+  const [msProfiles, setMsProfiles] = useState<Array<{ email: string; name: string; role: Role; jobTitle?: string; department: string }>>([]);
   const { setAuth } = useAuthStore();
   const navigate = useNavigate();
+
+  const finishLogin = (res: { user: any; accessToken: string; refreshToken: string }) => {
+    setAuth(res.user, res.accessToken, res.refreshToken);
+    const map: Record<Role, string> = {
+      ADMIN: '/admin/dashboard',
+      MANAGER: '/manager/dashboard',
+      EMPLOYEE: '/employee/dashboard',
+    };
+    toast.success(`Welcome back, ${res.user.name}!`);
+    navigate(map[res.user.role]);
+  };
 
   const onSubmit = async (data: FormData) => {
     try {
       const res = await authService.login(data.email, data.password);
-      setAuth(res.user, res.accessToken, res.refreshToken);
-      const map: Record<Role, string> = {
-        ADMIN: '/admin/dashboard',
-        MANAGER: '/manager/dashboard',
-        EMPLOYEE: '/employee/dashboard',
-      };
-      toast.success(`Welcome back, ${res.user.name}!`);
-      navigate(map[res.user.role]);
+      finishLogin(res);
     } catch (err: any) {
       toast.error(err?.response?.data?.error?.message ?? 'Invalid credentials');
+    }
+  };
+
+  const handleMicrosoftEntry = async () => {
+    try {
+      setMsLoading(true);
+      const data = await authService.getMicrosoftProfiles();
+      setMsProfiles(data.profiles ?? []);
+    } catch {
+      toast.error('Microsoft demo profiles are unavailable');
+    } finally {
+      setMsLoading(false);
+    }
+  };
+
+  const handleMicrosoftLogin = async (email: string) => {
+    try {
+      setMsLoading(true);
+      const res = await authService.loginWithMicrosoftDemo(email);
+      finishLogin(res);
+    } catch (err: any) {
+      toast.error(err?.response?.data?.error?.message ?? 'Microsoft demo sign-in failed');
+    } finally {
+      setMsLoading(false);
     }
   };
 
@@ -133,7 +163,35 @@ export default function LoginPage() {
             >
               {isSubmitting ? 'Signing in…' : 'Sign in'}
             </button>
+            <button
+              type="button"
+              onClick={handleMicrosoftEntry}
+              disabled={msLoading}
+              className="btn-secondary btn w-full py-3 gap-2"
+            >
+              <MonitorSmartphone size={16} />
+              {msLoading ? 'Loading Microsoft demo…' : 'Sign in with Microsoft Demo'}
+            </button>
           </form>
+
+          {msProfiles.length > 0 && (
+            <div className="mt-4 rounded-2xl border border-surface-700 bg-surface-900/70 p-4">
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-3">Microsoft Demo Profiles</p>
+              <div className="space-y-2">
+                {msProfiles.map((profile) => (
+                  <button
+                    key={profile.email}
+                    type="button"
+                    onClick={() => handleMicrosoftLogin(profile.email)}
+                    className="w-full rounded-xl border border-surface-700 px-3 py-2 text-left hover:border-brand-500 transition-colors"
+                  >
+                    <p className="text-sm font-medium text-white">{profile.name}</p>
+                    <p className="text-xs text-slate-400">{profile.jobTitle} · {profile.department} · {profile.role}</p>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Quick login */}
           <div className="mt-8">

@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.updateUser = exports.createUser = exports.getTeam = exports.getUser = exports.listUsers = void 0;
+exports.updateUser = exports.createUser = exports.listManagers = exports.getTeam = exports.getUser = exports.listUsers = void 0;
 const bcrypt_1 = __importDefault(require("bcrypt"));
 const client_1 = require("@prisma/client");
 const prisma_1 = require("../lib/prisma");
@@ -31,7 +31,7 @@ function limitUpdateForNonAdmin(req, targetUserId, input) {
     if (authUser.id !== targetUserId) {
         throw (0, errors_1.forbidden)('Only admins can update other users');
     }
-    const allowedKeys = ['name', 'password'];
+    const allowedKeys = ['name', 'password', 'jobTitle'];
     const blockedKeys = Object.keys(input).filter((key) => !allowedKeys.includes(key));
     if (blockedKeys.length > 0) {
         throw (0, errors_1.forbidden)('Only admins can update email, role, department, or manager');
@@ -67,6 +67,13 @@ exports.getTeam = (0, asyncHandler_1.asyncHandler)(async (req, res) => {
     });
     res.json({ users: sanitizeUsers(users) });
 });
+exports.listManagers = (0, asyncHandler_1.asyncHandler)(async (_req, res) => {
+    const users = await prisma_1.prisma.user.findMany({
+        where: { role: client_1.Role.MANAGER },
+        orderBy: { name: 'asc' }
+    });
+    res.json({ users: sanitizeUsers(users) });
+});
 exports.createUser = (0, asyncHandler_1.asyncHandler)(async (req, res) => {
     const hashedPassword = await bcrypt_1.default.hash(req.body.password, 10);
     const user = await prisma_1.prisma.user.create({
@@ -76,6 +83,7 @@ exports.createUser = (0, asyncHandler_1.asyncHandler)(async (req, res) => {
             password: hashedPassword,
             role: req.body.role,
             department: req.body.department,
+            jobTitle: req.body.jobTitle,
             managerId: req.body.managerId ?? null
         }
     });
@@ -92,6 +100,8 @@ exports.updateUser = (0, asyncHandler_1.asyncHandler)(async (req, res) => {
         data.role = input.role;
     if (input.department !== undefined)
         data.department = input.department;
+    if (input.jobTitle !== undefined)
+        data.jobTitle = input.jobTitle;
     if (input.managerId !== undefined)
         data.managerId = input.managerId;
     if (input.password !== undefined)

@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.dependencySchema = exports.sharedGoalSchema = exports.approveGoalSchema = exports.rejectGoalSchema = exports.updateGoalSchema = exports.createGoalSchema = exports.goalIdParamSchema = void 0;
+exports.dependencySchema = exports.importGoalPortfolioSchema = exports.sharedGoalSchema = exports.approveGoalSchema = exports.rejectGoalSchema = exports.updateGoalSchema = exports.createGoalSchema = exports.goalIdParamSchema = void 0;
 const client_1 = require("@prisma/client");
 const zod_1 = require("zod");
 const optionalDateString = zod_1.z
@@ -20,7 +20,8 @@ exports.createGoalSchema = zod_1.z.object({
     uomType: zod_1.z.nativeEnum(client_1.UoMType),
     target: zod_1.z.number().finite(),
     targetDate: optionalDateString,
-    weightage: zod_1.z.number().min(10).max(80),
+    weightage: zod_1.z.number().min(10).max(100),
+    sensitivity: zod_1.z.nativeEnum(client_1.GoalSensitivity).optional(),
     qualityScore: zod_1.z.number().min(0).max(100).optional(),
     qualityFeedback: zod_1.z.unknown().optional()
 });
@@ -45,9 +46,18 @@ exports.sharedGoalSchema = zod_1.z.object({
     uomType: zod_1.z.nativeEnum(client_1.UoMType),
     target: zod_1.z.number().finite(),
     targetDate: optionalDateString,
-    weightage: zod_1.z.number().min(10).max(80),
+    weightage: zod_1.z.number().min(10).max(100),
+    sensitivity: zod_1.z.nativeEnum(client_1.GoalSensitivity).optional(),
     qualityScore: zod_1.z.number().min(0).max(100).optional(),
     qualityFeedback: zod_1.z.unknown().optional()
+});
+exports.importGoalPortfolioSchema = zod_1.z.object({
+    cycleId: zod_1.z.string().uuid().optional(),
+    goals: zod_1.z
+        .array(exports.createGoalSchema
+        .omit({ cycleId: true })
+        .extend({ rationale: zod_1.z.string().trim().min(3).optional() }))
+        .length(5)
 });
 exports.dependencySchema = zod_1.z.object({
     requiredGoalId: zod_1.z.string().uuid()

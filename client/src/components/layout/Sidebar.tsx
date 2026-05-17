@@ -31,6 +31,7 @@ const navItems: NavItem[] = [
   { to: '/manager/shared-goals',    label: 'Shared Goals',     icon: <Share2 size={18} />,           roles: ['MANAGER'] },
   { to: '/manager/analytics',       label: 'Analytics',        icon: <BarChart2 size={18} />,        roles: ['MANAGER'] },
   { to: '/manager/dependency-graph',label: 'Dependency Graph', icon: <Network size={18} />,          roles: ['MANAGER'] },
+  { to: '/manager/delegations',     label: 'Delegations',      icon: <Settings size={18} />,         roles: ['MANAGER', 'ADMIN'] },
 
   // Admin
   { to: '/admin/dashboard',        label: 'Dashboard',       icon: <LayoutDashboard size={18} />, roles: ['ADMIN'] },

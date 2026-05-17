@@ -20,6 +20,7 @@ export function toPublicUser(user: User): PublicUser {
     name: user.name,
     role: user.role,
     department: user.department,
+    jobTitle: user.jobTitle,
     managerId: user.managerId
   };
 }

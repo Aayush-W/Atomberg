@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { useAuthStore } from '@/stores/authStore';
-import { goalsService, cyclesService, mlService } from '@/services/services';
+import { goalsService, cyclesService, mlService, kudosService } from '@/services/services';
 import { StatCard, PageHeader, Spinner, ErrorState, StatusBadge, ProgressBar, EmptyState } from '@/components/common';
 import { Target, CheckSquare, TrendingUp, AlertCircle, Plus, ClipboardCheck } from 'lucide-react';
 import { Link } from 'react-router-dom';
@@ -29,6 +29,11 @@ export default function EmployeeDashboard() {
     },
   });
   const { data: anomalies = [] } = useQuery({ queryKey: ['anomalies'], queryFn: mlService.getAnomalies });
+  const { data: kudos = [] } = useQuery({
+    queryKey: ['my-kudos', user?.id],
+    queryFn: () => kudosService.getAll(user?.id),
+    enabled: !!user?.id,
+  });
   const myAnomaly = anomalies.find((a) => a.userId === user?.id && a.isAnomaly);
 
   if (!user || isLoading) return <div className="flex items-center justify-center h-64"><Spinner size={32} /></div>;
@@ -42,6 +47,13 @@ export default function EmployeeDashboard() {
     <div className="space-y-6 animate-fade-in">
       <PageHeader title={`Good day, ${user?.name?.split(' ')[0] ?? 'User'} 👋`} subtitle="Your goal health overview"
         actions={<Link to="/employee/goals/new" className="btn-primary btn gap-2"><Plus size={16}/>Add Goal</Link>} />
+
+      {user.jobTitle && (
+        <div className="rounded-2xl bg-surface-100 dark:bg-surface-900/70 border border-surface-200 dark:border-surface-800 px-5 py-3">
+          <p className="text-sm text-slate-500">Role profile</p>
+          <p className="text-sm font-semibold text-slate-800 dark:text-white">{user.jobTitle}</p>
+        </div>
+      )}
 
       {cycleStatus?.activeQuarter && (
         <div className="rounded-2xl bg-brand-600/10 border border-brand-500/30 px-5 py-3 flex items-center gap-3">
@@ -119,6 +131,29 @@ export default function EmployeeDashboard() {
               ))
             )}
           </div>
+        </div>
+      </div>
+
+      <div className="card p-0 overflow-hidden">
+        <div className="px-5 py-4 border-b border-surface-100 dark:border-surface-800">
+          <h2 className="font-semibold text-slate-800 dark:text-white">Peer Kudos</h2>
+          <p className="text-xs text-slate-400 mt-0.5">Recent recognition linked to your work</p>
+        </div>
+        <div className="divide-y divide-surface-100 dark:divide-surface-800">
+          {kudos.length === 0 ? (
+            <p className="text-sm text-slate-400 text-center py-8">No kudos yet. Keep building momentum.</p>
+          ) : (
+            kudos.slice(0, 5).map((item) => (
+              <div key={item.id} className="px-5 py-4">
+                <div className="flex items-center justify-between gap-3 mb-1">
+                  <p className="text-sm font-semibold text-slate-800 dark:text-white">{item.badgeType.replace(/_/g, ' ')}</p>
+                  <span className="text-xs text-slate-400">{new Date(item.createdAt).toLocaleDateString()}</span>
+                </div>
+                <p className="text-xs text-slate-500 mb-1">From {item.sender?.name ?? 'A teammate'}{item.goal?.title ? ` · ${item.goal.title}` : ''}</p>
+                <p className="text-sm text-slate-600 dark:text-slate-300">{item.note}</p>
+              </div>
+            ))
+          )}
         </div>
       </div>
     </div>

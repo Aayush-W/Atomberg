@@ -6,6 +6,7 @@ import { asyncHandler } from '../utils/asyncHandler';
 import { signAccessToken, signRefreshToken, toPublicUser, verifyRefreshToken } from '../utils/auth';
 import { unauthorized } from '../utils/errors';
 import { LoginInput, RefreshInput } from '../validators/auth.validators';
+import { getMicrosoftDemoProfiles, syncMicrosoftDemoUser } from '../services/microsoftDemo.service';
 
 const refreshCookieName = 'goalforge_refresh_token';
 
@@ -80,4 +81,27 @@ export const me = asyncHandler(async (req: Request, res: Response) => {
   }
 
   res.json({ user: toPublicUser(user) });
+});
+
+export const microsoftStart = asyncHandler(async (_req: Request, res: Response) => {
+  res.json({
+    mode: 'demo',
+    profiles: getMicrosoftDemoProfiles(),
+    callbackBase: '/api/auth/microsoft/callback'
+  });
+});
+
+export const microsoftCallback = asyncHandler(async (req: Request, res: Response) => {
+  const email = typeof req.query.email === 'string' ? req.query.email.toLowerCase() : null;
+  if (!email) {
+    throw unauthorized('Microsoft demo email is required');
+  }
+
+  const user = await syncMicrosoftDemoUser(email);
+  const publicUser = toPublicUser(user);
+  const accessToken = signAccessToken(publicUser);
+  const refreshToken = signRefreshToken(publicUser);
+  setRefreshCookie(res, refreshToken);
+
+  res.json({ accessToken, refreshToken, user: publicUser, provider: 'MICROSOFT_DEMO' });
 });

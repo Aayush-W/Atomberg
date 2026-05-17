@@ -6,8 +6,8 @@ import { AuthUser } from '../types/auth';
 const activeGoalStatuses: GoalStatus[] = [GoalStatus.DRAFT, GoalStatus.SUBMITTED, GoalStatus.APPROVED, GoalStatus.LOCKED];
 
 export function ensureGoalWeightage(weightage: number): void {
-  if (weightage < 10 || weightage > 80) {
-    throw badRequest('Goal weightage must be between 10% and 80%', { field: 'weightage' });
+  if (weightage < 10 || weightage > 100) {
+    throw badRequest('Goal weightage must be between 10% and 100%', { field: 'weightage' });
   }
 }
 
@@ -46,6 +46,21 @@ export async function ensureManagerCanActOnGoal(user: AuthUser, goal: Goal): Pro
   if (user.role === Role.MANAGER) {
     const owner = await prisma.user.findUnique({ where: { id: goal.userId } });
     if (owner?.managerId === user.id) {
+      return;
+    }
+
+    const delegation = owner?.managerId
+      ? await prisma.approvalDelegation.findFirst({
+          where: {
+            delegatorManagerId: owner.managerId,
+            delegateManagerId: user.id,
+            isActive: true,
+            startsAt: { lte: new Date() },
+            endsAt: { gte: new Date() }
+          }
+        })
+      : null;
+    if (delegation) {
       return;
     }
   }
@@ -111,9 +126,9 @@ export async function ensureGoalSheetTotals(userId: string, cycleId: string): Pr
     throw badRequest('Employees can have a maximum of 8 active goals per cycle', { field: 'goals' });
   }
 
-  const invalidGoal = goals.find((goal) => goal.weightage < 10 || goal.weightage > 80);
+  const invalidGoal = goals.find((goal) => goal.weightage < 10 || goal.weightage > 100);
   if (invalidGoal) {
-    throw badRequest('Every goal weightage must be between 10% and 80%', {
+    throw badRequest('Every goal weightage must be between 10% and 100%', {
       field: 'weightage',
       goalId: invalidGoal.id
     });

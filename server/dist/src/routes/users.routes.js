@@ -44,6 +44,7 @@ const user_validators_1 = require("../validators/user.validators");
 exports.usersRouter = (0, express_1.Router)();
 exports.usersRouter.use(auth_middleware_1.requireAuth);
 exports.usersRouter.get('/', (0, role_middleware_1.requireRole)(client_1.Role.ADMIN), usersController.listUsers);
+exports.usersRouter.get('/managers', (0, role_middleware_1.requireRole)(client_1.Role.MANAGER, client_1.Role.ADMIN), usersController.listManagers);
 exports.usersRouter.post('/', (0, role_middleware_1.requireRole)(client_1.Role.ADMIN), (0, validate_middleware_1.validate)(user_validators_1.createUserSchema), usersController.createUser);
 exports.usersRouter.get('/team/:managerId', (0, validate_middleware_1.validate)(user_validators_1.managerIdParamSchema, 'params'), usersController.getTeam);
 exports.usersRouter.get('/:id', (0, validate_middleware_1.validate)(user_validators_1.idParamSchema, 'params'), usersController.getUser);

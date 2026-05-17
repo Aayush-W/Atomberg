@@ -6,6 +6,7 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGri
 export default function AdminMLInsightsPage() {
   const { data: anomalies = [], isLoading: aLoading } = useQuery({ queryKey: ['anomalies'], queryFn: mlService.getAnomalies });
   const { isLoading: sLoading } = useQuery({ queryKey: ['sentiment-all'], queryFn: () => mlService.getSentimentTrends('') });
+  const { data: sentimentSummary } = useQuery({ queryKey: ['team-sentiment-all'], queryFn: () => mlService.getTeamSentiment() });
 
   if (aLoading || sLoading) return <div className="flex items-center justify-center h-64"><Spinner size={32}/></div>;
 
@@ -63,6 +64,43 @@ export default function AdminMLInsightsPage() {
             </BarChart>
           </ResponsiveContainer>
         </div>
+
+        {sentimentSummary && (
+          <div className="card p-5">
+            <h2 className="font-semibold text-slate-800 dark:text-white mb-4">Sentiment Health</h2>
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-slate-500">Latest average sentiment</span>
+                <span className="font-bold text-brand-400">{sentimentSummary.latestAverage.toFixed(2)}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-slate-500">Engagement score</span>
+                <span className="font-bold text-success-400">{sentimentSummary.engagementScore.toFixed(0)}%</span>
+              </div>
+              <div className="grid grid-cols-3 gap-3 pt-2">
+                <div className="rounded-xl bg-danger-500/10 p-3 text-center">
+                  <p className="text-xs text-slate-400">High risk</p>
+                  <p className="text-xl font-display font-bold text-danger-400">{sentimentSummary.burnoutRisk.high}</p>
+                </div>
+                <div className="rounded-xl bg-warning-500/10 p-3 text-center">
+                  <p className="text-xs text-slate-400">Medium risk</p>
+                  <p className="text-xl font-display font-bold text-warning-400">{sentimentSummary.burnoutRisk.medium}</p>
+                </div>
+                <div className="rounded-xl bg-success-500/10 p-3 text-center">
+                  <p className="text-xs text-slate-400">Low risk</p>
+                  <p className="text-xl font-display font-bold text-success-400">{sentimentSummary.burnoutRisk.low}</p>
+                </div>
+              </div>
+              {sentimentSummary.alertFlags.length > 0 && (
+                <div className="rounded-xl bg-danger-500/10 border border-danger-500/20 p-3">
+                  {sentimentSummary.alertFlags.map((flag) => (
+                    <p key={flag} className="text-sm text-danger-300">{flag}</p>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Full anomaly table */}
         <div className="xl:col-span-2 card p-0 overflow-hidden">

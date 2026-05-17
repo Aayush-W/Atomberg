@@ -22,6 +22,20 @@ export default function AdminReportsPage() {
     onError: () => toast.error('Export failed'),
   });
 
+  const dossierMut = useMutation({
+    mutationFn: (userId: string) => reportsService.exportDossier(userId),
+    onSuccess: (blob: Blob, userId) => {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `performance-dossier-${userId}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success('Performance dossier downloaded');
+    },
+    onError: () => toast.error('Dossier export failed'),
+  });
+
   if (isLoading) return <div className="flex items-center justify-center h-64"><Spinner size={32}/></div>;
   if (error) return <ErrorState onRetry={refetch}/>;
 
@@ -40,7 +54,7 @@ export default function AdminReportsPage() {
           <thead>
             <tr>
               <th>Employee</th><th>Dept</th><th>Goals</th>
-              <th>Avg Quality</th><th>Avg Progress</th><th>Locked Goals</th>
+              <th>Avg Quality</th><th>Avg Progress</th><th>Locked Goals</th><th>Dossier</th>
             </tr>
           </thead>
           <tbody>
@@ -72,10 +86,15 @@ export default function AdminReportsPage() {
                     <span className="font-semibold">{row.lockedGoals}</span>
                   </div>
                 </td>
+                <td>
+                  <button onClick={() => dossierMut.mutate(row.userId)} className="btn-secondary btn btn-sm">
+                    PDF
+                  </button>
+                </td>
               </tr>
             ))}
             {report.length === 0 && (
-              <tr><td colSpan={6} className="text-center py-8 text-slate-400">No report data yet. Goals must be approved and have check-ins.</td></tr>
+              <tr><td colSpan={7} className="text-center py-8 text-slate-400">No report data yet. Goals must be approved and have check-ins.</td></tr>
             )}
           </tbody>
         </table>

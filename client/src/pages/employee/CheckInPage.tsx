@@ -23,7 +23,7 @@ function calcScore(goal: Goal, actual: number, completionDate?: string): number 
 export default function CheckInPage() {
   const qc = useQueryClient();
   const [activeQ, setActiveQ] = useState<Quarter>('Q1');
-  const [values, setValues] = useState<Record<string, { actual: number; status: CheckInStatus; completionDate?: string }>>({});
+  const [values, setValues] = useState<Record<string, { actual: number; status: CheckInStatus; completionDate?: string; employeeNote?: string }>>({});
 
   const { data: goals = [], isLoading, error, refetch } = useQuery({ queryKey: ['my-goals'], queryFn: goalsService.getMine });
   const { data: cycleStatus } = useQuery({
@@ -46,6 +46,7 @@ export default function CheckInPage() {
             goalId: g.id, userId: '', quarter: activeQ,
             actualValue: v.actual, status: v.status,
             progressScore: score, completionDate: v.completionDate,
+            employeeNote: v.employeeNote,
           });
         })
       );
@@ -86,7 +87,7 @@ export default function CheckInPage() {
       ) : (
         <div className="space-y-4">
           {approvedGoals.map((g) => {
-            const v = values[g.id] || { actual: 0, status: 'NOT_STARTED' as CheckInStatus };
+            const v = values[g.id] || { actual: 0, status: 'NOT_STARTED' as CheckInStatus, employeeNote: '' };
             const previewScore = calcScore(g, v.actual, v.completionDate);
             return (
               <div key={g.id} className="card p-5 space-y-4">
@@ -123,6 +124,17 @@ export default function CheckInPage() {
                         className="input" disabled={!windowOpen}/>
                     </div>
                   )}
+                </div>
+                <div>
+                  <label className="label">Progress Notes</label>
+                  <textarea
+                    value={v.employeeNote || ''}
+                    onChange={(e) => setValues((p) => ({ ...p, [g.id]: { ...v, employeeNote: e.target.value } }))}
+                    rows={3}
+                    className="input resize-none"
+                    placeholder="Share wins, blockers, risks, or support needed…"
+                    disabled={!windowOpen}
+                  />
                 </div>
               </div>
             );

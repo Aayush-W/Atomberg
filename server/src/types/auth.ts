@@ -6,6 +6,7 @@ export interface AuthUser {
   name: string;
   role: Role;
   department: string;
+  jobTitle: string | null;
   managerId: string | null;
 }
 
@@ -22,5 +23,6 @@ export interface PublicUser {
   name: string;
   role: Role;
   department: string;
+  jobTitle: string | null;
   managerId: string | null;
 }

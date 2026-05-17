@@ -9,6 +9,7 @@ import {
   createGoalSchema,
   dependencySchema,
   goalIdParamSchema,
+  importGoalPortfolioSchema,
   rejectGoalSchema,
   sharedGoalSchema,
   updateGoalSchema
@@ -22,6 +23,7 @@ goalsRouter.get('/', goalsController.listOwnGoals);
 goalsRouter.get('/team', requireRole(Role.MANAGER, Role.ADMIN), goalsController.listTeamGoals);
 goalsRouter.get('/all', requireRole(Role.ADMIN), goalsController.listAllGoals);
 goalsRouter.post('/', requireRole(Role.EMPLOYEE), validate(createGoalSchema), goalsController.createGoal);
+goalsRouter.post('/portfolio/import', requireRole(Role.EMPLOYEE), validate(importGoalPortfolioSchema), goalsController.importGoalPortfolio);
 goalsRouter.post('/shared', requireRole(Role.MANAGER, Role.ADMIN), validate(sharedGoalSchema), goalsController.createSharedGoal);
 goalsRouter.get('/dependency-graph', goalsController.getDependencyGraph);
 goalsRouter.get('/:id/audit', validate(goalIdParamSchema, 'params'), goalsController.getGoalAudit);

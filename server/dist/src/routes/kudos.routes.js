@@ -1,0 +1,12 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.kudosRouter = void 0;
+const express_1 = require("express");
+const auth_middleware_1 = require("../middleware/auth.middleware");
+const validate_middleware_1 = require("../middleware/validate.middleware");
+const kudos_controller_1 = require("../controllers/kudos.controller");
+const kudos_validators_1 = require("../validators/kudos.validators");
+exports.kudosRouter = (0, express_1.Router)();
+exports.kudosRouter.use(auth_middleware_1.requireAuth);
+exports.kudosRouter.get('/', kudos_controller_1.listKudos);
+exports.kudosRouter.post('/', (0, validate_middleware_1.validate)(kudos_validators_1.createKudosSchema), kudos_controller_1.createKudos);

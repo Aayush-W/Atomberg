@@ -1,13 +1,14 @@
-
-import { Prisma, Role } from '@prisma/client';
+import { Role } from '@prisma/client';
 import { Request, Response } from 'express';
 import { prisma } from '../lib/prisma';
 import { asyncHandler } from '../utils/asyncHandler';
-import { forbidden, unauthorized } from '../utils/errors';
+import { forbidden } from '../utils/errors';
 import { currentUser } from './_helpers';
-import { AuthUser } from '../types/auth';
+import { goalSummary } from '../services/ai.service';
+import { buildSimplePdf, maskGoalContent } from '../services/reporting.service';
+import { buildTeamSentimentSummary } from '../services/sentiment.service';
 
-function scopeGoals(user: AuthUser) {
+function scopeGoals(user: { role: Role; id: string }) {
   if (user.role === Role.ADMIN) {
     return {};
   }
@@ -17,16 +18,9 @@ function scopeGoals(user: AuthUser) {
   throw forbidden('Report access is restricted to managers and admins');
 }
 
-function buildTeamQuery(user: AuthUser) {
-  if (user.role === Role.ADMIN) {
-    return {};
-  }
-  return { managerId: user.id };
-}
-
 function latestProgress(checkIns: Array<{ progressScore: number; createdAt: Date }>) {
   if (!checkIns.length) return 0;
-  return checkIns.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())[0].progressScore;
+  return [...checkIns].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())[0].progressScore;
 }
 
 export const getAchievementReport = asyncHandler(async (req: Request, res: Response) => {
@@ -50,11 +44,9 @@ export const getAchievementReport = asyncHandler(async (req: Request, res: Respo
       name: goal.user.name,
       department: goal.user.department,
       goals: 0,
-      avgQualityScore: 0,
-      avgProgressScore: 0,
-      lockedGoals: 0,
       totalQualityScore: 0,
-      totalProgressScore: 0
+      totalProgressScore: 0,
+      lockedGoals: 0
     };
 
     current.goals += 1;
@@ -86,7 +78,7 @@ export const getCompletionReport = asyncHandler(async (req: Request, res: Respon
   }
 
   const employees = await prisma.user.findMany({
-    where: { 
+    where: {
       role: Role.EMPLOYEE,
       ...(user.role === Role.MANAGER ? { managerId: user.id } : {})
     },
@@ -99,20 +91,20 @@ export const getCompletionReport = asyncHandler(async (req: Request, res: Respon
     }
   });
 
-  const report = employees.map((emp) => {
-    const goals = emp.goals;
-    const submitted = goals.length > 0 && goals.some((g) => g.status !== 'DRAFT');
-    const approved = goals.length > 0 && goals.every((g) => g.status === 'APPROVED' || g.status === 'LOCKED');
-    
+  const report = employees.map((employee) => {
+    const goals = employee.goals;
+    const submitted = goals.length > 0 && goals.some((goal) => goal.status !== 'DRAFT');
+    const approved = goals.length > 0 && goals.every((goal) => ['APPROVED', 'LOCKED'].includes(goal.status));
+
     return {
-      employeeName: emp.name,
-      manager: emp.manager?.name ?? 'N/A',
+      employeeName: employee.name,
+      manager: employee.manager?.name ?? 'N/A',
       goalsSubmitted: submitted,
       goalsApproved: approved,
-      q1Done: goals.some((g) => g.checkIns.some((ci) => ci.quarter === 'Q1')),
-      q2Done: goals.some((g) => g.checkIns.some((ci) => ci.quarter === 'Q2')),
-      q3Done: goals.some((g) => g.checkIns.some((ci) => ci.quarter === 'Q3')),
-      q4Done: goals.some((g) => g.checkIns.some((ci) => ci.quarter === 'Q4')),
+      q1Done: goals.some((goal) => goal.checkIns.some((checkIn) => checkIn.quarter === 'Q1')),
+      q2Done: goals.some((goal) => goal.checkIns.some((checkIn) => checkIn.quarter === 'Q2')),
+      q3Done: goals.some((goal) => goal.checkIns.some((checkIn) => checkIn.quarter === 'Q3')),
+      q4Done: goals.some((goal) => goal.checkIns.some((checkIn) => checkIn.quarter === 'Q4'))
     };
   });
 
@@ -142,8 +134,9 @@ export const getManagerEffectivenessReport = asyncHandler(async (req: Request, r
 
       const totalGoals = goals.length;
       const lockedGoals = goals.filter((goal) => goal.status === 'LOCKED').length;
-      const submittedGoals = goals.filter((goal) => goal.status === 'SUBMITTED' || goal.status === 'LOCKED' || goal.status === 'APPROVED').length;
-      const averageProgress = totalGoals ? Number((goals.reduce((sum, goal) => sum + latestProgress(goal.checkIns), 0) / totalGoals).toFixed(2)) : 0;
+      const submittedGoals = goals.filter((goal) => ['SUBMITTED', 'LOCKED', 'APPROVED'].includes(goal.status)).length;
+      const averageProgress =
+        totalGoals > 0 ? Number((goals.reduce((sum, goal) => sum + latestProgress(goal.checkIns), 0) / totalGoals).toFixed(2)) : 0;
 
       return {
         managerId: manager.id,
@@ -189,4 +182,137 @@ export const getQoQTrendsReport = asyncHandler(async (req: Request, res: Respons
     .sort((a, b) => a.quarter.localeCompare(b.quarter));
 
   res.json({ trends });
+});
+
+export const getLeaderboards = asyncHandler(async (req: Request, res: Response) => {
+  const user = currentUser(req);
+  if (user.role !== Role.ADMIN && user.role !== Role.MANAGER) {
+    throw forbidden('Only managers and admins can view leaderboards');
+  }
+
+  const employees = await prisma.user.findMany({
+    where: {
+      role: Role.EMPLOYEE,
+      ...(user.role === Role.MANAGER ? { managerId: user.id } : {})
+    },
+    include: {
+      goals: {
+        where: { cycle: { isActive: true } },
+        include: { checkIns: true, kudos: true }
+      }
+    }
+  });
+
+  const sentiment = await buildTeamSentimentSummary(user.role === Role.MANAGER ? user.id : undefined);
+
+  const leaderboard = employees.reduce<Record<string, { department: string; members: number; onTime: number; progress: number; kudos: number; healthy: number }>>(
+    (acc, employee) => {
+      const bucket = acc[employee.department] ?? {
+        department: employee.department,
+        members: 0,
+        onTime: 0,
+        progress: 0,
+        kudos: 0,
+        healthy: 0
+      };
+
+      bucket.members += 1;
+      const checkIns = employee.goals.flatMap((goal) => goal.checkIns);
+      const goalProgress = employee.goals.length
+        ? employee.goals.reduce((sum, goal) => sum + latestProgress(goal.checkIns), 0) / employee.goals.length
+        : 0;
+      bucket.progress += goalProgress;
+      bucket.kudos += employee.goals.reduce((sum, goal) => sum + goal.kudos.length, 0);
+      bucket.onTime += checkIns.length > 0 ? 1 : 0;
+      bucket.healthy += checkIns.some((checkIn) => (checkIn.sentiment ?? 0) >= 0.1) ? 1 : 0;
+      acc[employee.department] = bucket;
+      return acc;
+    },
+    {}
+  );
+
+  const rows = Object.values(leaderboard)
+    .map((row) => ({
+      department: row.department,
+      onTimeCompliance: row.members ? Number(((row.onTime / row.members) * 100).toFixed(1)) : 0,
+      averageProgress: row.members ? Number((row.progress / row.members).toFixed(1)) : 0,
+      kudosEarned: row.kudos,
+      healthySentimentRate: row.members ? Number(((row.healthy / row.members) * 100).toFixed(1)) : 0
+    }))
+    .sort((a, b) => b.onTimeCompliance - a.onTimeCompliance);
+
+  res.json({
+    leaderboard: rows,
+    engagementScore: sentiment.engagementScore,
+    alertFlags: sentiment.alertFlags
+  });
+});
+
+export const getPerformanceDossier = asyncHandler(async (req: Request<{ userId: string }>, res: Response) => {
+  const user = currentUser(req);
+  const employee = await prisma.user.findUnique({
+    where: { id: req.params.userId },
+    include: {
+      manager: { select: { name: true } },
+      goals: {
+        where: { cycle: { isActive: true } },
+        include: {
+          checkIns: { orderBy: { createdAt: 'asc' } },
+          kudos: {
+            include: {
+              sender: { select: { name: true } }
+            }
+          }
+        },
+        orderBy: { createdAt: 'asc' }
+      }
+    }
+  });
+
+  if (!employee) {
+    throw forbidden('Employee not found');
+  }
+
+  const canView =
+    user.role === Role.ADMIN ||
+    user.id === employee.id ||
+    (user.role === Role.MANAGER && employee.managerId === user.id);
+  if (!canView) {
+    throw forbidden('You do not have access to this dossier');
+  }
+
+  const summary = await goalSummary({
+    employee: { id: employee.id, name: employee.name, department: employee.department, jobTitle: employee.jobTitle },
+    goals: employee.goals
+  });
+
+  const goalLines = employee.goals.flatMap((goal, index) => {
+    const visible = maskGoalContent(goal, user);
+    const latest = goal.checkIns.at(-1);
+    return [
+      `${index + 1}. ${visible.title}`,
+      `   Area: ${goal.thrustArea} | Weight: ${goal.weightage}% | Sensitivity: ${goal.sensitivity}`,
+      `   Description: ${visible.description}`,
+      `   Latest progress: ${latest?.progressScore ?? 0}% | Manager note: ${latest?.managerComment ?? goal.managerComment ?? 'N/A'}`,
+      `   Kudos: ${goal.kudos.map((kudos) => `${kudos.sender.name} (${kudos.badgeType})`).join(', ') || 'None'}`
+    ];
+  });
+
+  const pdf = buildSimplePdf([
+    'GoalForge Performance Dossier',
+    `Employee: ${employee.name}`,
+    `Department: ${employee.department}`,
+    `Job Title: ${employee.jobTitle ?? 'N/A'}`,
+    `Manager: ${employee.manager?.name ?? 'N/A'}`,
+    '',
+    'AI Summary:',
+    summary.summary,
+    '',
+    'Goals:',
+    ...goalLines
+  ]);
+
+  res.setHeader('Content-Type', 'application/pdf');
+  res.setHeader('Content-Disposition', `attachment; filename="goalforge-dossier-${employee.name.replace(/\s+/g, '-').toLowerCase()}.pdf"`);
+  res.send(pdf);
 });

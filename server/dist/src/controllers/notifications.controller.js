@@ -2,6 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.markAllRead = exports.markRead = exports.getNotifications = void 0;
 exports.createNotification = createNotification;
+const client_1 = require("@prisma/client");
 const prisma_1 = require("../lib/prisma");
 const getNotifications = async (req, res, next) => {
     try {
@@ -10,7 +11,7 @@ const getNotifications = async (req, res, next) => {
             orderBy: { createdAt: 'desc' },
             take: 50,
         });
-        res.json(notifications);
+        res.json({ notifications });
     }
     catch (err) {
         next(err);
@@ -44,6 +45,6 @@ const markAllRead = async (req, res, next) => {
 };
 exports.markAllRead = markAllRead;
 // Helper: create a notification
-async function createNotification(userId, type, title, message) {
-    return prisma_1.prisma.notification.create({ data: { userId, type, title, message } });
+async function createNotification(userId, type, title, message, channel = client_1.NotificationChannel.IN_APP, metadata) {
+    return prisma_1.prisma.notification.create({ data: { userId, type, title, message, channel, metadata: metadata } });
 }

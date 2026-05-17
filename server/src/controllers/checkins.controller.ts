@@ -5,38 +5,35 @@ import { asyncHandler } from '../utils/asyncHandler';
 import { badRequest, forbidden, unauthorized } from '../utils/errors';
 import { CreateCheckInInput, UpdateCheckInInput } from '../validators/checkin.validators';
 import { currentUser as getCurrentUser } from './_helpers';
-import { ensureUserCanAccessGoal, createAuditLog } from '../services/goalRules.service';
+import { ensureUserCanAccessGoal, createAuditLog, getActiveCycleOrThrow } from '../services/goalRules.service';
+import { cycleStatus } from '../services/cycleRules.service';
+import { calculateSentimentScore } from '../services/sentiment.service';
 
 function computeProgress(goal: Goal & { target: number | null; targetDate?: Date | null }, input: Partial<CreateCheckInInput & UpdateCheckInInput>) {
   const uom = goal.uomType as UoMType;
   const actual = typeof input.actualValue === 'number' ? input.actualValue : 0;
 
   if (uom === UoMType.MAX) {
-    if (!goal.target || goal.target === 0) return 0;
-    return Math.min(100, (actual / goal.target) * 100);
+    if (!goal.target || goal.target === 0 || actual === 0) return actual === 0 ? 100 : 0;
+    return Math.round((goal.target / actual) * 100);
   }
 
   if (uom === UoMType.MIN) {
     if (!goal.target || goal.target === 0) return 0;
-    // lower is better: if actual <= target -> 100, else degrade
-    if (actual <= goal.target) return 100;
-    const ratio = Math.max(0, 1 - (actual - goal.target) / goal.target);
-    return Math.round(Math.max(0, ratio * 100));
+    return Math.round((actual / goal.target) * 100);
   }
 
   if (uom === UoMType.TIMELINE) {
-    const completion = (input as any).completionDate as Date | undefined | null;
+    const completion = (input as any).completionDate as Date | string | undefined | null;
     if (!goal.targetDate) return 0;
     if (!completion) return 0;
-    const diff = Math.floor((goal.targetDate.getTime() - completion.getTime()) / (1000 * 60 * 60 * 24));
-    // on-time or early => 100, late decreases by 2 points per day late
+    const diff = Math.floor((goal.targetDate.getTime() - new Date(completion).getTime()) / (1000 * 60 * 60 * 24));
     if (diff >= 0) return 100;
-    return Math.max(0, 100 + diff * 2); // diff is negative when late
+    return Math.max(0, 100 + diff * 2);
   }
 
-  // ZERO (binary) or fallback
   if (uom === UoMType.ZERO) {
-    return actual > 0 ? 100 : 0;
+    return actual === 0 ? 100 : 0;
   }
 
   return 0;
@@ -54,6 +51,17 @@ export const createCheckIn = asyncHandler(async (req: Request<unknown, unknown, 
     throw forbidden('Employees can only create check-ins for their own goals');
   }
 
+  if (goal.isShared && goal.parentGoalId !== null && user.role === 'EMPLOYEE') {
+    throw forbidden('Employees cannot directly create check-ins for shared child goals');
+  }
+
+  const cycle = await getActiveCycleOrThrow(goal.cycleId);
+  const cycleStatusObj = cycleStatus(cycle as any);
+  const qStatus = cycleStatusObj.checkIns[req.body.quarter];
+  if (!qStatus || !qStatus.isOpen) {
+    throw badRequest(`Check-in window for ${req.body.quarter} is closed`);
+  }
+
   const progress = computeProgress(goal as any, req.body as any);
 
   const checkIn = await prisma.checkIn.create({
@@ -64,11 +72,39 @@ export const createCheckIn = asyncHandler(async (req: Request<unknown, unknown, 
       actualValue: req.body.actualValue,
       completionDate: req.body.completionDate ?? null,
       status: req.body.status ?? 'ON_TRACK',
-      progressScore: progress
+      progressScore: progress,
+      employeeNote: req.body.employeeNote ?? null,
+      sentiment: calculateSentimentScore([req.body.employeeNote])
     }
   });
 
   await createAuditLog({ goalId: goal.id, userId: user.id, action: 'CHECKIN_CREATED' });
+
+  if (goal.isShared && goal.parentGoalId === null) {
+    const childGoals = await prisma.goal.findMany({ where: { parentGoalId: goal.id } });
+    if (childGoals.length > 0) {
+      await prisma.checkIn.createMany({
+        data: childGoals.map(cg => ({
+          goalId: cg.id,
+          userId: cg.userId,
+          quarter: req.body.quarter,
+          actualValue: req.body.actualValue,
+          completionDate: req.body.completionDate ?? null,
+          status: req.body.status ?? 'ON_TRACK',
+          progressScore: progress,
+          employeeNote: req.body.employeeNote ?? null,
+          sentiment: calculateSentimentScore([req.body.employeeNote])
+        }))
+      });
+      await prisma.auditLog.createMany({
+        data: childGoals.map(cg => ({
+          goalId: cg.id,
+          userId: user.id,
+          action: 'CHECKIN_SYNCED'
+        }))
+      });
+    }
+  }
 
   res.status(201).json({ checkIn });
 });
@@ -112,6 +148,17 @@ export const updateCheckIn = asyncHandler(async (req: Request<{ id: string }, un
 
   await ensureUserCanAccessGoal(user, goal);
 
+  if (goal.isShared && goal.parentGoalId !== null && user.role === 'EMPLOYEE') {
+    throw forbidden('Employees cannot directly update check-ins for shared child goals');
+  }
+
+  const cycle = await getActiveCycleOrThrow(goal.cycleId);
+  const cycleStatusObj = cycleStatus(cycle as any);
+  const qStatus = cycleStatusObj.checkIns[existing.quarter];
+  if (!qStatus || !qStatus.isOpen) {
+    throw badRequest(`Check-in window for ${existing.quarter} is closed`);
+  }
+
   // Only managers/admins can add manager comments
   if (req.body.managerComment && user.role === 'EMPLOYEE') {
     throw forbidden('Only managers or admins can add manager comments');
@@ -121,6 +168,9 @@ export const updateCheckIn = asyncHandler(async (req: Request<{ id: string }, un
   if (req.body.actualValue !== undefined) toUpdate.actualValue = req.body.actualValue;
   if (req.body.completionDate !== undefined) toUpdate.completionDate = req.body.completionDate as any;
   if (req.body.status !== undefined) toUpdate.status = req.body.status as any;
+  if (req.body.employeeNote !== undefined) {
+    toUpdate.employeeNote = req.body.employeeNote as any;
+  }
   if (req.body.managerComment !== undefined) {
     toUpdate.managerComment = req.body.managerComment as any;
     toUpdate.managerCheckedAt = new Date();
@@ -129,9 +179,40 @@ export const updateCheckIn = asyncHandler(async (req: Request<{ id: string }, un
   // recompute progress if numeric fields changed
   const progress = computeProgress(goal as any, { ...existing, ...(req.body as any) });
   toUpdate.progressScore = progress as any;
+  toUpdate.sentiment = calculateSentimentScore([
+    req.body.employeeNote ?? existing.employeeNote,
+    req.body.managerComment ?? existing.managerComment
+  ]) as any;
 
   const updated = await prisma.checkIn.update({ where: { id: existing.id }, data: toUpdate });
   await createAuditLog({ goalId: goal.id, userId: user.id, action: 'CHECKIN_UPDATED' });
+
+  if (goal.isShared && goal.parentGoalId === null) {
+    const childGoals = await prisma.goal.findMany({ where: { parentGoalId: goal.id } });
+    if (childGoals.length > 0) {
+      await prisma.checkIn.updateMany({
+        where: {
+          goalId: { in: childGoals.map(cg => cg.id) },
+          quarter: existing.quarter
+        },
+        data: {
+          actualValue: toUpdate.actualValue,
+          completionDate: toUpdate.completionDate,
+          status: toUpdate.status,
+          progressScore: toUpdate.progressScore,
+          employeeNote: toUpdate.employeeNote,
+          sentiment: toUpdate.sentiment
+        }
+      });
+      await prisma.auditLog.createMany({
+        data: childGoals.map(cg => ({
+          goalId: cg.id,
+          userId: user.id,
+          action: 'CHECKIN_SYNCED'
+        }))
+      });
+    }
+  }
 
   res.json({ checkIn: updated });
 });
@@ -152,8 +233,38 @@ export const deleteCheckIn = asyncHandler(async (req: Request<{ id: string }>, r
     throw forbidden('Employees can only delete their own check-ins');
   }
 
+  if (goal.isShared && goal.parentGoalId !== null && user.role === 'EMPLOYEE') {
+    throw forbidden('Employees cannot directly delete check-ins for shared child goals');
+  }
+
+  const cycle = await getActiveCycleOrThrow(goal.cycleId);
+  const cycleStatusObj = cycleStatus(cycle as any);
+  const qStatus = cycleStatusObj.checkIns[checkIn.quarter];
+  if (!qStatus || !qStatus.isOpen) {
+    throw badRequest(`Check-in window for ${checkIn.quarter} is closed`);
+  }
+
   await prisma.checkIn.delete({ where: { id: checkIn.id } });
   await createAuditLog({ goalId: goal.id, userId: user.id, action: 'CHECKIN_DELETED' });
+
+  if (goal.isShared && goal.parentGoalId === null) {
+    const childGoals = await prisma.goal.findMany({ where: { parentGoalId: goal.id } });
+    if (childGoals.length > 0) {
+      await prisma.checkIn.deleteMany({
+        where: {
+          goalId: { in: childGoals.map(cg => cg.id) },
+          quarter: checkIn.quarter
+        }
+      });
+      await prisma.auditLog.createMany({
+        data: childGoals.map(cg => ({
+          goalId: cg.id,
+          userId: user.id,
+          action: 'CHECKIN_SYNCED_DELETE'
+        }))
+      });
+    }
+  }
 
   res.status(204).send();
 });

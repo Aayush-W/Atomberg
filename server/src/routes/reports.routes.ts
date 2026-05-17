@@ -11,3 +11,5 @@ reportsRouter.get('/achievement', requireRole(Role.MANAGER, Role.ADMIN), reports
 reportsRouter.get('/completion', requireRole(Role.MANAGER, Role.ADMIN), reportsController.getCompletionReport);
 reportsRouter.get('/manager-effectiveness', requireRole(Role.MANAGER, Role.ADMIN), reportsController.getManagerEffectivenessReport);
 reportsRouter.get('/qoq-trends', requireRole(Role.MANAGER, Role.ADMIN), reportsController.getQoQTrendsReport);
+reportsRouter.get('/leaderboards', requireRole(Role.MANAGER, Role.ADMIN), reportsController.getLeaderboards);
+reportsRouter.get('/dossier/:userId', reportsController.getPerformanceDossier);

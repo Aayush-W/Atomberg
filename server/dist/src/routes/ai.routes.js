@@ -11,3 +11,4 @@ exports.aiRouter.post('/conflict-check', ai_controller_1.conflictCheck);
 exports.aiRouter.post('/suggest-weightage', ai_controller_1.suggestWeightage);
 exports.aiRouter.post('/conversational-checkin', ai_controller_1.conversationalCheckin);
 exports.aiRouter.post('/goal-summary', ai_controller_1.goalSummary);
+exports.aiRouter.post('/goal-autopilot', ai_controller_1.goalAutopilot);

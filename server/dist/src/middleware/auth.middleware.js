@@ -33,6 +33,7 @@ async function requireAuth(req, _res, next) {
             name: user.name,
             role: user.role,
             department: user.department,
+            jobTitle: user.jobTitle,
             managerId: user.managerId
         };
         next();

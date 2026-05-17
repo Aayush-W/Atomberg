@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { useAuthStore } from '@/stores/authStore';
-import { goalsService, usersService, checkinsService, mlService } from '@/services/services';
+import { goalsService, usersService, mlService, integrationsService } from '@/services/services';
 import { StatCard, PageHeader, Spinner, ErrorState, StatusBadge, ProgressBar } from '@/components/common';
 import { Users, ClipboardCheck, TrendingUp, AlertTriangle } from 'lucide-react';
 import { Link } from 'react-router-dom';
@@ -15,6 +15,16 @@ export default function ManagerDashboard() {
   });
   const { data: teamGoals = [], isLoading: goalsLoading, error, refetch } = useQuery({ queryKey: ['team-goals'], queryFn: goalsService.getTeam });
   const { data: anomalies = [] } = useQuery({ queryKey: ['anomalies'], queryFn: mlService.getAnomalies });
+  const { data: teamSentiment } = useQuery({
+    queryKey: ['team-sentiment', user?.id],
+    queryFn: () => mlService.getTeamSentiment(user?.id),
+    enabled: !!user?.id,
+  });
+  const { data: teamCards = [] } = useQuery({
+    queryKey: ['teams-cards', user?.id],
+    queryFn: () => integrationsService.getTeamsCards(user?.id ?? ''),
+    enabled: !!user?.id,
+  });
 
   if (!user || teamLoading || goalsLoading) return <div className="flex items-center justify-center h-64"><Spinner size={32}/></div>;
   if (error) return <ErrorState onRetry={refetch}/>;
@@ -33,6 +43,34 @@ export default function ManagerDashboard() {
         <StatCard title="Team Avg Progress" value={`${avgProgress.toFixed(0)}%`} icon={<TrendingUp size={18}/>} color="success"/>
         <StatCard title="Anomalies Flagged" value={teamAnomalies.length} icon={<AlertTriangle size={18}/>} color="danger"/>
       </div>
+
+      {teamSentiment && (
+        <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+          <div className="card p-4">
+            <p className="text-xs uppercase tracking-wide text-slate-400 mb-1">Team Sentiment</p>
+            <p className={`text-3xl font-display font-bold ${teamSentiment.latestAverage <= -0.15 ? 'text-danger-400' : teamSentiment.latestAverage < 0.1 ? 'text-warning-400' : 'text-success-400'}`}>
+              {teamSentiment.latestAverage.toFixed(2)}
+            </p>
+          </div>
+          <div className="card p-4">
+            <p className="text-xs uppercase tracking-wide text-slate-400 mb-1">Engagement Score</p>
+            <p className="text-3xl font-display font-bold text-brand-400">{teamSentiment.engagementScore.toFixed(0)}%</p>
+          </div>
+          <div className="card p-4">
+            <p className="text-xs uppercase tracking-wide text-slate-400 mb-1">Active Alerts</p>
+            <p className="text-3xl font-display font-bold text-slate-800 dark:text-white">{teamSentiment.alertFlags.length}</p>
+          </div>
+        </div>
+      )}
+
+      {teamSentiment?.alertFlags?.length ? (
+        <div className="rounded-2xl bg-danger-500/10 border border-danger-500/20 px-5 py-4">
+          <p className="text-sm font-semibold text-danger-300 mb-1">Burnout watchlist</p>
+          {teamSentiment.alertFlags.map((flag) => (
+            <p key={flag} className="text-sm text-danger-200">{flag}</p>
+          ))}
+        </div>
+      ) : null}
 
       {teamAnomalies.length > 0 && (
         <div className="card p-5">
@@ -101,6 +139,28 @@ export default function ManagerDashboard() {
               );
             })}
           </div>
+        </div>
+      </div>
+
+      <div className="card p-0 overflow-hidden">
+        <div className="px-5 py-4 border-b border-surface-100 dark:border-surface-800">
+          <h2 className="font-semibold text-slate-800 dark:text-white">Microsoft Teams Approval Cards</h2>
+          <p className="text-xs text-slate-400 mt-0.5">Demo-ready card payloads generated from employee submissions</p>
+        </div>
+        <div className="divide-y divide-surface-100 dark:divide-surface-800">
+          {teamCards.length === 0 ? (
+            <p className="text-sm text-slate-400 text-center py-8">No Teams cards generated yet.</p>
+          ) : (
+            teamCards.slice(0, 4).map((card) => (
+              <div key={card.id} className="px-5 py-4">
+                <div className="flex items-center justify-between gap-3 mb-2">
+                  <p className="font-semibold text-slate-800 dark:text-white">{card.title}</p>
+                  <StatusBadge status={card.channel || 'TEAMS'} />
+                </div>
+                <p className="text-sm text-slate-500">{card.message}</p>
+              </div>
+            ))
+          )}
         </div>
       </div>
     </div>

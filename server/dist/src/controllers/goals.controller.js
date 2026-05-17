@@ -1,11 +1,14 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.addDependency = exports.getDependencyGraph = exports.getGoalAudit = exports.createSharedGoal = exports.unlockGoal = exports.rejectGoal = exports.approveGoal = exports.submitGoal = exports.deleteGoal = exports.updateGoal = exports.createGoal = exports.listAllGoals = exports.listTeamGoals = exports.listOwnGoals = void 0;
+exports.getGoal = exports.importGoalPortfolio = exports.addDependency = exports.getDependencyGraph = exports.getGoalAudit = exports.createSharedGoal = exports.unlockGoal = exports.rejectGoal = exports.approveGoal = exports.submitGoal = exports.deleteGoal = exports.updateGoal = exports.createGoal = exports.listAllGoals = exports.listTeamGoals = exports.listOwnGoals = void 0;
 const client_1 = require("@prisma/client");
 const prisma_1 = require("../lib/prisma");
 const asyncHandler_1 = require("../utils/asyncHandler");
 const errors_1 = require("../utils/errors");
+const notifications_controller_1 = require("./notifications.controller");
 const goalRules_service_1 = require("../services/goalRules.service");
+const goalConflict_service_1 = require("../services/goalConflict.service");
+const teams_service_1 = require("../services/teams.service");
 const goalInclude = {
     user: {
         select: {
@@ -18,8 +21,11 @@ const goalInclude = {
     },
     cycle: true,
     checkIns: true,
+    kudos: true,
     dependencies: true,
-    dependents: true
+    dependents: true,
+    conflictAlertsA: true,
+    conflictAlertsB: true
 };
 function currentUser(req) {
     if (!req.user) {
@@ -71,15 +77,48 @@ function updateGoalData(body) {
         data.targetDate = body.targetDate;
     if (body.weightage !== undefined)
         data.weightage = body.weightage;
+    if (body.sensitivity !== undefined)
+        data.sensitivity = body.sensitivity;
     if (body.qualityScore !== undefined)
         data.qualityScore = body.qualityScore;
     if (body.qualityFeedback !== undefined)
         data.qualityFeedback = body.qualityFeedback;
     return data;
 }
+async function refreshDepartmentConflictsForGoal(goal) {
+    const owner = await prisma_1.prisma.user.findUnique({
+        where: { id: goal.userId },
+        select: { department: true }
+    });
+    if (!owner) {
+        return [];
+    }
+    const departmentGoals = await prisma_1.prisma.goal.findMany({
+        where: {
+            cycleId: goal.cycleId,
+            status: { in: [client_1.GoalStatus.SUBMITTED, client_1.GoalStatus.APPROVED, client_1.GoalStatus.LOCKED] },
+            user: { department: owner.department }
+        },
+        select: {
+            id: true,
+            cycleId: true,
+            title: true,
+            description: true,
+            thrustArea: true,
+            target: true,
+            uomType: true,
+            weightage: true,
+            user: { select: { department: true } }
+        }
+    });
+    return (0, goalConflict_service_1.refreshGoalConflictAlerts)(departmentGoals);
+}
 exports.listOwnGoals = (0, asyncHandler_1.asyncHandler)(async (req, res) => {
     const user = currentUser(req);
-    const cycle = await (0, goalRules_service_1.getActiveCycleOrThrow)();
+    const cycle = await prisma_1.prisma.cycle.findFirst({ where: { isActive: true }, orderBy: { startDate: 'desc' } });
+    if (!cycle) {
+        return res.json({ goals: [] });
+    }
     const goals = await prisma_1.prisma.goal.findMany({
         where: { userId: user.id, cycleId: cycle.id },
         include: goalInclude,
@@ -125,6 +164,7 @@ exports.createGoal = (0, asyncHandler_1.asyncHandler)(async (req, res) => {
             target: req.body.target,
             targetDate: req.body.targetDate,
             weightage: req.body.weightage,
+            sensitivity: req.body.sensitivity,
             qualityScore: req.body.qualityScore,
             qualityFeedback: req.body.qualityFeedback
         },
@@ -187,6 +227,15 @@ exports.submitGoal = (0, asyncHandler_1.asyncHandler)(async (req, res) => {
         oldValue: before.status,
         newValue: client_1.GoalStatus.SUBMITTED
     });
+    await refreshDepartmentConflictsForGoal(goal);
+    if (goal.user.managerId) {
+        const card = (0, teams_service_1.buildAdaptiveGoalApprovalCard)(goal, goal.user.managerId);
+        await (0, notifications_controller_1.createNotification)(goal.user.managerId, 'APPROVAL_PENDING', `${goal.user.name} submitted goals for approval`, `Review ${goal.user.name}'s goal "${goal.title}" and approve or reject it from the Teams preview.`, client_1.NotificationChannel.TEAMS, {
+            goalId: goal.id,
+            employeeId: goal.user.id,
+            adaptiveCard: card
+        });
+    }
     res.json({ goal });
 });
 exports.approveGoal = (0, asyncHandler_1.asyncHandler)(async (req, res) => {
@@ -207,6 +256,7 @@ exports.approveGoal = (0, asyncHandler_1.asyncHandler)(async (req, res) => {
         include: goalInclude
     });
     await (0, goalRules_service_1.auditChangedFields)(user.id, before, goal, ['status', 'lockedAt', 'managerComment']);
+    await refreshDepartmentConflictsForGoal(goal);
     res.json({ goal });
 });
 exports.rejectGoal = (0, asyncHandler_1.asyncHandler)(async (req, res) => {
@@ -226,6 +276,7 @@ exports.rejectGoal = (0, asyncHandler_1.asyncHandler)(async (req, res) => {
         include: goalInclude
     });
     await (0, goalRules_service_1.auditChangedFields)(user.id, before, goal, ['status', 'managerComment', 'lockedAt']);
+    await refreshDepartmentConflictsForGoal(goal);
     res.json({ goal });
 });
 exports.unlockGoal = (0, asyncHandler_1.asyncHandler)(async (req, res) => {
@@ -268,6 +319,7 @@ exports.createSharedGoal = (0, asyncHandler_1.asyncHandler)(async (req, res) => 
             targetDate: req.body.targetDate,
             weightage: req.body.weightage,
             isShared: false,
+            sensitivity: req.body.sensitivity,
             qualityScore: req.body.qualityScore,
             qualityFeedback: req.body.qualityFeedback
         }
@@ -285,6 +337,7 @@ exports.createSharedGoal = (0, asyncHandler_1.asyncHandler)(async (req, res) => 
             weightage: req.body.weightage,
             isShared: true,
             parentGoalId: parentGoal.id,
+            sensitivity: req.body.sensitivity,
             qualityScore: req.body.qualityScore,
             qualityFeedback: req.body.qualityFeedback
         }
@@ -333,21 +386,11 @@ exports.getDependencyGraph = (0, asyncHandler_1.asyncHandler)(async (req, res) =
         }
     });
     res.json({
-        nodes: goals.map((goal) => ({
-            id: goal.id,
-            employeeName: goal.user.name,
-            department: goal.user.department,
-            title: goal.title,
-            thrustArea: goal.thrustArea,
-            status: goal.status,
-            isShared: goal.isShared,
+        goals: goals.map((goal) => ({
+            ...goal,
             progressScore: goal.checkIns.at(-1)?.progressScore ?? 0
         })),
-        edges: dependencies.map((dependency) => ({
-            id: dependency.id,
-            source: dependency.requiredGoalId,
-            target: dependency.dependentGoalId
-        }))
+        dependencies
     });
 });
 exports.addDependency = (0, asyncHandler_1.asyncHandler)(async (req, res) => {
@@ -373,4 +416,63 @@ exports.addDependency = (0, asyncHandler_1.asyncHandler)(async (req, res) => {
         newValue: requiredGoal.id
     });
     res.status(201).json({ dependency });
+});
+exports.importGoalPortfolio = (0, asyncHandler_1.asyncHandler)(async (req, res) => {
+    const user = currentUser(req);
+    if (user.role !== client_1.Role.EMPLOYEE) {
+        throw (0, errors_1.forbidden)('Only employees can import their own portfolio');
+    }
+    const goals = Array.isArray(req.body.goals) ? req.body.goals : [];
+    if (goals.length !== 5) {
+        throw (0, errors_1.badRequest)('Portfolio import expects exactly 5 goals');
+    }
+    const cycle = await (0, goalRules_service_1.getActiveCycleOrThrow)(req.body.cycleId);
+    const existing = await prisma_1.prisma.goal.findMany({
+        where: { userId: user.id, cycleId: cycle.id }
+    });
+    if (existing.some((goal) => goal.status !== client_1.GoalStatus.DRAFT && goal.status !== client_1.GoalStatus.REJECTED)) {
+        throw (0, errors_1.badRequest)('Portfolio import is only available before any goals are submitted or approved');
+    }
+    const totalWeightage = goals.reduce((sum, goal) => sum + goal.weightage, 0);
+    if (Math.abs(totalWeightage - 100) > 0.001) {
+        throw (0, errors_1.badRequest)('Imported goals must sum to exactly 100% weightage');
+    }
+    await prisma_1.prisma.$transaction(async (tx) => {
+        await tx.goal.deleteMany({
+            where: { userId: user.id, cycleId: cycle.id, status: { in: [client_1.GoalStatus.DRAFT, client_1.GoalStatus.REJECTED] } }
+        });
+        for (const goal of goals) {
+            (0, goalRules_service_1.ensureGoalWeightage)(goal.weightage);
+            await tx.goal.create({
+                data: {
+                    userId: user.id,
+                    cycleId: cycle.id,
+                    thrustArea: goal.thrustArea,
+                    title: goal.title,
+                    description: goal.description,
+                    uomType: goal.uomType,
+                    target: goal.target,
+                    targetDate: goal.targetDate,
+                    weightage: goal.weightage,
+                    sensitivity: goal.sensitivity,
+                    qualityFeedback: {
+                        source: 'goal-autopilot',
+                        rationale: goal.rationale ?? null
+                    }
+                }
+            });
+        }
+    });
+    const importedGoals = await prisma_1.prisma.goal.findMany({
+        where: { userId: user.id, cycleId: cycle.id },
+        include: goalInclude,
+        orderBy: { createdAt: 'asc' }
+    });
+    res.status(201).json({ goals: importedGoals });
+});
+exports.getGoal = (0, asyncHandler_1.asyncHandler)(async (req, res) => {
+    const user = currentUser(req);
+    const goal = await findGoalOrThrow(req.params.id);
+    await (0, goalRules_service_1.ensureUserCanAccessGoal)(user, goal);
+    res.json({ goal });
 });

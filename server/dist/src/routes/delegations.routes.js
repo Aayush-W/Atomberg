@@ -1,0 +1,12 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.delegationsRouter = void 0;
+const express_1 = require("express");
+const auth_middleware_1 = require("../middleware/auth.middleware");
+const validate_middleware_1 = require("../middleware/validate.middleware");
+const delegations_controller_1 = require("../controllers/delegations.controller");
+const delegation_validators_1 = require("../validators/delegation.validators");
+exports.delegationsRouter = (0, express_1.Router)();
+exports.delegationsRouter.use(auth_middleware_1.requireAuth);
+exports.delegationsRouter.get('/', delegations_controller_1.listDelegations);
+exports.delegationsRouter.post('/', (0, validate_middleware_1.validate)(delegation_validators_1.createDelegationSchema), delegations_controller_1.createDelegation);

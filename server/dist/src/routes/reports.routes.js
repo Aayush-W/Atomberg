@@ -45,3 +45,5 @@ exports.reportsRouter.get('/achievement', (0, role_middleware_1.requireRole)(cli
 exports.reportsRouter.get('/completion', (0, role_middleware_1.requireRole)(client_1.Role.MANAGER, client_1.Role.ADMIN), reportsController.getCompletionReport);
 exports.reportsRouter.get('/manager-effectiveness', (0, role_middleware_1.requireRole)(client_1.Role.MANAGER, client_1.Role.ADMIN), reportsController.getManagerEffectivenessReport);
 exports.reportsRouter.get('/qoq-trends', (0, role_middleware_1.requireRole)(client_1.Role.MANAGER, client_1.Role.ADMIN), reportsController.getQoQTrendsReport);
+exports.reportsRouter.get('/leaderboards', (0, role_middleware_1.requireRole)(client_1.Role.MANAGER, client_1.Role.ADMIN), reportsController.getLeaderboards);
+exports.reportsRouter.get('/dossier/:userId', reportsController.getPerformanceDossier);

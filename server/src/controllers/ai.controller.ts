@@ -64,3 +64,18 @@ export const goalSummary = async (req: Request, res: Response, next: NextFunctio
     next(err);
   }
 };
+
+export const goalAutopilot = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const jobTitle = req.body.jobTitle || req.user?.jobTitle;
+    if (!jobTitle) {
+      return res.status(400).json({ error: { code: 'MISSING_FIELDS', message: 'jobTitle is required' } });
+    }
+
+    const result = await aiSvc.goalAutopilot(jobTitle, req.body.department || req.user?.department);
+    res.json(result);
+  } catch (err: any) {
+    if (err?.status === 529 || err?.message?.includes('timeout')) return res.status(503).json(AI_UNAVAILABLE);
+    next(err);
+  }
+};

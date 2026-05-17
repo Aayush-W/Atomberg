@@ -1,15 +1,19 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuthStore } from '@/stores/authStore';
-import { usersService, goalsService, checkinsService } from '@/services/services';
+import { usersService, goalsService, checkinsService, kudosService } from '@/services/services';
 import { PageHeader, Spinner, ErrorState, StatusBadge, ProgressBar } from '@/components/common';
 import toast from 'react-hot-toast';
 import { format } from 'date-fns';
+import type { KudosBadgeType } from '@/types';
+
+const BADGES: KudosBadgeType[] = ['COLLABORATOR', 'PROBLEM_SOLVER', 'INNOVATION_SPARK', 'CUSTOMER_CHAMPION', 'EXECUTION_ACE'];
 
 export default function TeamPage() {
   const user = useAuthStore((s) => s.user);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [commentTexts, setCommentTexts] = useState<Record<string, string>>({});
+  const [kudosForms, setKudosForms] = useState<Record<string, { badgeType: KudosBadgeType; note: string }>>({});
   const qc = useQueryClient();
 
   const { data: team = [], isLoading, error, refetch } = useQuery({ 
@@ -23,6 +27,16 @@ export default function TeamPage() {
     mutationFn: ({ id, comment }: { id: string; comment: string }) => checkinsService.addManagerComment(id, comment),
     onSuccess: () => { toast.success('Comment saved'); qc.invalidateQueries({ queryKey: ['team-goals'] }); },
     onError: (e: any) => toast.error(e?.response?.data?.error?.message ?? 'Failed'),
+  });
+
+  const kudosMut = useMutation({
+    mutationFn: ({ receiverId, goalId, badgeType, note }: { receiverId: string; goalId?: string; badgeType: KudosBadgeType; note: string }) =>
+      kudosService.create({ receiverId, goalId, badgeType, note }),
+    onSuccess: () => {
+      toast.success('Kudos sent');
+      qc.invalidateQueries({ queryKey: ['team-goals'] });
+    },
+    onError: (e: any) => toast.error(e?.response?.data?.error?.message ?? 'Failed to send kudos'),
   });
 
   if (!user || isLoading) return <div className="flex items-center justify-center h-64"><Spinner size={32}/></div>;
@@ -79,9 +93,39 @@ export default function TeamPage() {
                   <div className="px-5 py-4 border-b border-surface-100 dark:border-surface-800 flex items-center gap-3">
                     <div className="flex-1 min-w-0">
                       <p className="font-semibold text-slate-800 dark:text-white truncate">{g.title}</p>
-                      <p className="text-xs text-slate-400">{g.thrustArea} · {g.weightage}%</p>
+                      <p className="text-xs text-slate-400">{g.thrustArea} · {g.weightage}% · {g.sensitivity || 'NORMAL'}</p>
                     </div>
                     <StatusBadge status={g.status}/>
+                  </div>
+                  <div className="px-5 py-4 border-b border-surface-100 dark:border-surface-800 bg-surface-50 dark:bg-surface-900/40">
+                    <div className="grid grid-cols-1 md:grid-cols-[180px,1fr,auto] gap-3 items-end">
+                      <div>
+                        <label className="label">Badge</label>
+                        <select
+                          value={kudosForms[g.id]?.badgeType || 'COLLABORATOR'}
+                          onChange={(e) => setKudosForms((prev) => ({ ...prev, [g.id]: { badgeType: e.target.value as KudosBadgeType, note: prev[g.id]?.note || '' } }))}
+                          className="input"
+                        >
+                          {BADGES.map((badge) => <option key={badge}>{badge}</option>)}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="label">Peer Kudos Note</label>
+                        <input
+                          value={kudosForms[g.id]?.note || ''}
+                          onChange={(e) => setKudosForms((prev) => ({ ...prev, [g.id]: { badgeType: prev[g.id]?.badgeType || 'COLLABORATOR', note: e.target.value } }))}
+                          className="input"
+                          placeholder="Recognize a teammate's impact on this goal..."
+                        />
+                      </div>
+                      <button
+                        onClick={() => kudosMut.mutate({ receiverId: g.userId, goalId: g.id, badgeType: kudosForms[g.id]?.badgeType || 'COLLABORATOR', note: kudosForms[g.id]?.note || '' })}
+                        disabled={!kudosForms[g.id]?.note || kudosMut.isPending}
+                        className="btn-primary btn"
+                      >
+                        Send Kudos
+                      </button>
+                    </div>
                   </div>
                   {g.checkIns && g.checkIns.length > 0 && (
                     <div className="p-4 space-y-3">
@@ -96,6 +140,7 @@ export default function TeamPage() {
                           </div>
                           <ProgressBar value={ci.progressScore} size="sm"/>
                           <p className="text-xs text-slate-500 mt-1.5">Actual: {ci.actualValue}</p>
+                          {ci.employeeNote && <p className="text-xs text-slate-500 mt-1.5">Employee note: {ci.employeeNote}</p>}
                           {ci.managerComment ? (
                             <div className="mt-2 p-2 rounded-lg bg-brand-500/10 border border-brand-500/20 text-xs text-slate-400">
                               <p className="font-semibold text-brand-300 mb-0.5">Your comment {ci.sentiment != null && (ci.sentiment > 0.05 ? '😊' : ci.sentiment < -0.05 ? '😟' : '😐')}</p>

@@ -25,6 +25,7 @@ function toPublicUser(user) {
         name: user.name,
         role: user.role,
         department: user.department,
+        jobTitle: user.jobTitle,
         managerId: user.managerId
     };
 }

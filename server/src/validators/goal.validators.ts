@@ -1,4 +1,4 @@
-import { UoMType } from '@prisma/client';
+import { GoalSensitivity, UoMType } from '@prisma/client';
 import { z } from 'zod';
 
 const optionalDateString = z
@@ -20,7 +20,8 @@ export const createGoalSchema = z.object({
   uomType: z.nativeEnum(UoMType),
   target: z.number().finite(),
   targetDate: optionalDateString,
-  weightage: z.number().min(10).max(80),
+  weightage: z.number().min(10).max(100),
+  sensitivity: z.nativeEnum(GoalSensitivity).optional(),
   qualityScore: z.number().min(0).max(100).optional(),
   qualityFeedback: z.unknown().optional()
 });
@@ -49,9 +50,21 @@ export const sharedGoalSchema = z.object({
   uomType: z.nativeEnum(UoMType),
   target: z.number().finite(),
   targetDate: optionalDateString,
-  weightage: z.number().min(10).max(80),
+  weightage: z.number().min(10).max(100),
+  sensitivity: z.nativeEnum(GoalSensitivity).optional(),
   qualityScore: z.number().min(0).max(100).optional(),
   qualityFeedback: z.unknown().optional()
+});
+
+export const importGoalPortfolioSchema = z.object({
+  cycleId: z.string().uuid().optional(),
+  goals: z
+    .array(
+      createGoalSchema
+        .omit({ cycleId: true })
+        .extend({ rationale: z.string().trim().min(3).optional() })
+    )
+    .length(5)
 });
 
 export const dependencySchema = z.object({
@@ -64,3 +77,4 @@ export type ApproveGoalInput = z.infer<typeof approveGoalSchema>;
 export type RejectGoalInput = z.infer<typeof rejectGoalSchema>;
 export type SharedGoalInput = z.infer<typeof sharedGoalSchema>;
 export type DependencyInput = z.infer<typeof dependencySchema>;
+export type ImportGoalPortfolioInput = z.infer<typeof importGoalPortfolioSchema>;

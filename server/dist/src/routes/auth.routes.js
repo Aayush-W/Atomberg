@@ -43,4 +43,6 @@ exports.authRouter = (0, express_1.Router)();
 exports.authRouter.post('/login', (0, validate_middleware_1.validate)(auth_validators_1.loginSchema), authController.login);
 exports.authRouter.post('/refresh', (0, validate_middleware_1.validate)(auth_validators_1.refreshSchema), authController.refresh);
 exports.authRouter.post('/logout', authController.logout);
+exports.authRouter.get('/microsoft/start', authController.microsoftStart);
+exports.authRouter.get('/microsoft/callback', authController.microsoftCallback);
 exports.authRouter.get('/me', auth_middleware_1.requireAuth, authController.me);

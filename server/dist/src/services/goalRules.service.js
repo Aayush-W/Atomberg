@@ -14,8 +14,8 @@ const prisma_1 = require("../lib/prisma");
 const errors_1 = require("../utils/errors");
 const activeGoalStatuses = [client_1.GoalStatus.DRAFT, client_1.GoalStatus.SUBMITTED, client_1.GoalStatus.APPROVED, client_1.GoalStatus.LOCKED];
 function ensureGoalWeightage(weightage) {
-    if (weightage < 10 || weightage > 80) {
-        throw (0, errors_1.badRequest)('Goal weightage must be between 10% and 80%', { field: 'weightage' });
+    if (weightage < 10 || weightage > 100) {
+        throw (0, errors_1.badRequest)('Goal weightage must be between 10% and 100%', { field: 'weightage' });
     }
 }
 async function getActiveCycleOrThrow(cycleId) {
@@ -46,6 +46,20 @@ async function ensureManagerCanActOnGoal(user, goal) {
     if (user.role === client_1.Role.MANAGER) {
         const owner = await prisma_1.prisma.user.findUnique({ where: { id: goal.userId } });
         if (owner?.managerId === user.id) {
+            return;
+        }
+        const delegation = owner?.managerId
+            ? await prisma_1.prisma.approvalDelegation.findFirst({
+                where: {
+                    delegatorManagerId: owner.managerId,
+                    delegateManagerId: user.id,
+                    isActive: true,
+                    startsAt: { lte: new Date() },
+                    endsAt: { gte: new Date() }
+                }
+            })
+            : null;
+        if (delegation) {
             return;
         }
     }
@@ -99,9 +113,9 @@ async function ensureGoalSheetTotals(userId, cycleId) {
     if (goals.length > 8) {
         throw (0, errors_1.badRequest)('Employees can have a maximum of 8 active goals per cycle', { field: 'goals' });
     }
-    const invalidGoal = goals.find((goal) => goal.weightage < 10 || goal.weightage > 80);
+    const invalidGoal = goals.find((goal) => goal.weightage < 10 || goal.weightage > 100);
     if (invalidGoal) {
-        throw (0, errors_1.badRequest)('Every goal weightage must be between 10% and 80%', {
+        throw (0, errors_1.badRequest)('Every goal weightage must be between 10% and 100%', {
             field: 'weightage',
             goalId: invalidGoal.id
         });

@@ -10,6 +10,9 @@ import { notificationsRouter } from './notifications.routes';
 import { escalationsRouter } from './escalations.routes';
 import { aiRouter } from './ai.routes';
 import { mlRouter } from './ml.routes';
+import { kudosRouter } from './kudos.routes';
+import { delegationsRouter } from './delegations.routes';
+import { integrationsRouter } from './integrations.routes';
 
 export const apiRouter = Router();
 
@@ -24,3 +27,6 @@ apiRouter.use('/notifications', notificationsRouter);
 apiRouter.use('/escalations', escalationsRouter);
 apiRouter.use('/ai', aiRouter);
 apiRouter.use('/ml', mlRouter);
+apiRouter.use('/kudos', kudosRouter);
+apiRouter.use('/delegations', delegationsRouter);
+apiRouter.use('/integrations', integrationsRouter);

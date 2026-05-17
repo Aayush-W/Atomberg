@@ -15,6 +15,7 @@ export const createUserSchema = z.object({
   password: z.string().min(8),
   role: z.nativeEnum(Role),
   department: z.string().trim().min(2),
+  jobTitle: z.string().trim().min(2).optional(),
   managerId: z.string().uuid().nullable().optional()
 });
 
@@ -25,6 +26,7 @@ export const updateUserSchema = z
     password: z.string().min(8).optional(),
     role: z.nativeEnum(Role).optional(),
     department: z.string().trim().min(2).optional(),
+    jobTitle: z.string().trim().min(2).optional(),
     managerId: z.string().uuid().nullable().optional()
   })
   .refine((value) => Object.keys(value).length > 0, {

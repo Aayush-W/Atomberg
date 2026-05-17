@@ -5,6 +5,15 @@ export type UoMType = 'MIN' | 'MAX' | 'TIMELINE' | 'ZERO';
 export type GoalStatus = 'DRAFT' | 'SUBMITTED' | 'APPROVED' | 'REJECTED' | 'LOCKED';
 export type Quarter = 'Q1' | 'Q2' | 'Q3' | 'Q4';
 export type CheckInStatus = 'NOT_STARTED' | 'ON_TRACK' | 'COMPLETED';
+export type GoalSensitivity = 'NORMAL' | 'TECHNICAL' | 'FINANCIAL';
+export type AuthProvider = 'LOCAL' | 'MICROSOFT_DEMO';
+export type NotificationChannel = 'IN_APP' | 'EMAIL' | 'TEAMS';
+export type KudosBadgeType =
+  | 'COLLABORATOR'
+  | 'PROBLEM_SOLVER'
+  | 'INNOVATION_SPARK'
+  | 'CUSTOMER_CHAMPION'
+  | 'EXECUTION_ACE';
 
 export interface User {
   id: string;
@@ -12,6 +21,7 @@ export interface User {
   email: string;
   role: Role;
   department: string;
+  jobTitle?: string | null;
   managerId: string | null;
   manager?: User;
   createdAt: string;
@@ -46,6 +56,7 @@ export interface Goal {
   target: number;
   targetDate?: string;
   weightage: number;
+  sensitivity?: GoalSensitivity;
   status: GoalStatus;
   isShared: boolean;
   parentGoalId?: string;
@@ -54,6 +65,7 @@ export interface Goal {
   managerComment?: string;
   lockedAt?: string;
   checkIns?: CheckIn[];
+  kudos?: Kudos[];
   createdAt: string;
   updatedAt: string;
 }
@@ -69,6 +81,7 @@ export interface CheckIn {
   completionDate?: string;
   status: CheckInStatus;
   progressScore: number;
+  employeeNote?: string;
   managerComment?: string;
   managerCheckedAt?: string;
   sentiment?: number;
@@ -93,8 +106,10 @@ export interface Notification {
   id: string;
   userId: string;
   type: string;
+  channel?: NotificationChannel;
   title: string;
   message: string;
+  metadata?: Record<string, unknown>;
   isRead: boolean;
   createdAt: string;
 }
@@ -106,6 +121,49 @@ export interface EscalationRule {
   daysThreshold: number;
   isActive: boolean;
   escalationChain: Array<{ level: number; notifyRole: string }>;
+}
+
+export interface Kudos {
+  id: string;
+  senderId: string;
+  receiverId: string;
+  goalId?: string | null;
+  badgeType: KudosBadgeType;
+  note: string;
+  createdAt: string;
+  sender?: Pick<User, 'id' | 'name' | 'department'>;
+  receiver?: Pick<User, 'id' | 'name' | 'department'>;
+  goal?: Pick<Goal, 'id' | 'title'>;
+}
+
+export interface ApprovalDelegation {
+  id: string;
+  delegatorManagerId: string;
+  delegateManagerId: string;
+  startsAt: string;
+  endsAt: string;
+  reason: string;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+  delegatorManager?: Pick<User, 'id' | 'name' | 'department'>;
+  delegateManager?: Pick<User, 'id' | 'name' | 'department'>;
+}
+
+export interface TeamSentimentSummary {
+  trends: Array<{ quarter: Quarter; avgSentiment: number; sampleSize: number }>;
+  burnoutRisk: { high: number; medium: number; low: number };
+  engagementScore: number;
+  latestAverage: number;
+  alertFlags: string[];
+}
+
+export interface LeaderboardRow {
+  department: string;
+  onTimeCompliance: number;
+  averageProgress: number;
+  kudosEarned: number;
+  healthySentimentRate: number;
 }
 
 // ---- API Response types ----
@@ -136,6 +194,18 @@ export interface SmartRewriteResponse {
     timeBound: number;
   };
   suggestions: string[];
+}
+
+export interface GoalAutopilotGoal {
+  thrustArea: string;
+  title: string;
+  description: string;
+  uomType: UoMType;
+  target: number;
+  targetDate?: string | null;
+  weightage: number;
+  rationale: string;
+  sensitivity?: GoalSensitivity;
 }
 
 export interface GoalQualityResponse {

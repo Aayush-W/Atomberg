@@ -2,11 +2,13 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { Check, X, AlertTriangle } from 'lucide-react';
-import { goalsService, aiService } from '@/services/services';
+import { goalsService, aiService, integrationsService } from '@/services/services';
 import { PageHeader, Spinner, ErrorState, EmptyState, StatusBadge, Modal } from '@/components/common';
-import type { Goal, ConflictCheckResponse } from '@/types';
+import { useAuthStore } from '@/stores/authStore';
+import type { Goal, ConflictCheckResponse, Notification } from '@/types';
 
 export default function ApprovalsPage() {
+  const user = useAuthStore((s) => s.user);
   const qc = useQueryClient();
   const [rejectId, setRejectId] = useState<string | null>(null);
   const [rejectComment, setRejectComment] = useState('');
@@ -15,6 +17,11 @@ export default function ApprovalsPage() {
   const [conflictLoading, setConflictLoading] = useState(false);
 
   const { data: goals = [], isLoading, error, refetch } = useQuery({ queryKey: ['team-goals'], queryFn: goalsService.getTeam });
+  const { data: teamCards = [] } = useQuery({
+    queryKey: ['teams-cards', user?.id],
+    queryFn: () => integrationsService.getTeamsCards(user?.id ?? ''),
+    enabled: !!user?.id,
+  });
   const submitted = goals.filter((g) => g.status === 'SUBMITTED');
 
   // Group by user
@@ -35,6 +42,17 @@ export default function ApprovalsPage() {
     mutationFn: ({ id, comment }: { id: string; comment: string }) => goalsService.reject(id, comment),
     onSuccess: () => { toast.success('Goal returned for rework'); qc.invalidateQueries({ queryKey: ['team-goals'] }); setRejectId(null); setRejectComment(''); },
     onError: (e: any) => toast.error(e?.response?.data?.error?.message ?? 'Failed'),
+  });
+
+  const teamsActionMut = useMutation({
+    mutationFn: ({ decision, token }: { decision: 'approve' | 'reject'; token: string }) =>
+      integrationsService.submitTeamsAction(decision, token, decision === 'reject' ? 'Returned from Teams preview' : 'Approved from Teams preview'),
+    onSuccess: () => {
+      toast.success('Teams action applied');
+      qc.invalidateQueries({ queryKey: ['team-goals'] });
+      qc.invalidateQueries({ queryKey: ['teams-cards'] });
+    },
+    onError: () => toast.error('Teams action failed'),
   });
 
   const checkConflicts = async (userGoals: Goal[]) => {
@@ -69,6 +87,9 @@ export default function ApprovalsPage() {
                   <p className="font-semibold text-slate-800 dark:text-white">{emp?.name}</p>
                   <p className="text-xs text-slate-400">{emp?.department} · {userGoals.length} goals · Total weight: <span className={weightOk ? 'text-success-400' : 'text-danger-400 font-bold'}>{totalWeight}%</span></p>
                 </div>
+                {userGoals.some((goal) => (goal as any).conflictAlertsA?.length || (goal as any).conflictAlertsB?.length) && (
+                  <span className="badge badge-rejected">Open conflict</span>
+                )}
                 <button onClick={() => checkConflicts(userGoals)} disabled={conflictLoading}
                   className="btn-secondary btn btn-sm gap-1.5">
                   {conflictLoading ? <Spinner size={12}/> : <AlertTriangle size={13}/>} Check Conflicts
@@ -103,6 +124,46 @@ export default function ApprovalsPage() {
           );
         })
       )}
+
+      <div className="card p-0 overflow-hidden">
+        <div className="px-5 py-4 border-b border-surface-100 dark:border-surface-800">
+          <h2 className="font-semibold text-slate-800 dark:text-white">Teams Approval Preview</h2>
+          <p className="text-xs text-slate-400 mt-0.5">These cards use the same signed callback flow as the Microsoft demo integration.</p>
+        </div>
+        <div className="divide-y divide-surface-100 dark:divide-surface-800">
+          {teamCards.length === 0 ? (
+            <p className="text-sm text-slate-400 text-center py-8">No Teams approval cards yet.</p>
+          ) : (
+            teamCards.slice(0, 3).map((card: Notification) => {
+              const adaptiveCard = card.metadata?.adaptiveCard as { actions?: Array<{ title: string; data?: { token?: string } }> } | undefined;
+              const approveToken = adaptiveCard?.actions?.find((action) => action.title === 'Approve')?.data?.token;
+              const rejectToken = adaptiveCard?.actions?.find((action) => action.title === 'Reject')?.data?.token;
+              return (
+                <div key={card.id} className="px-5 py-4">
+                  <p className="font-semibold text-slate-800 dark:text-white mb-1">{card.title}</p>
+                  <p className="text-sm text-slate-500 mb-3">{card.message}</p>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => approveToken && teamsActionMut.mutate({ decision: 'approve', token: approveToken })}
+                      disabled={!approveToken || teamsActionMut.isPending}
+                      className="btn-primary btn btn-sm"
+                    >
+                      Approve From Teams
+                    </button>
+                    <button
+                      onClick={() => rejectToken && teamsActionMut.mutate({ decision: 'reject', token: rejectToken })}
+                      disabled={!rejectToken || teamsActionMut.isPending}
+                      className="btn-secondary btn btn-sm"
+                    >
+                      Reject From Teams
+                    </button>
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+      </div>
 
       {/* Reject modal */}
       <Modal open={!!rejectId} onClose={() => { setRejectId(null); setRejectComment(''); }} title="Return for Rework"

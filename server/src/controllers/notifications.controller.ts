@@ -1,3 +1,4 @@
+import { NotificationChannel } from '@prisma/client';
 import { Request, Response, NextFunction } from 'express';
 import { prisma } from '../lib/prisma';
 
@@ -33,6 +34,13 @@ export const markAllRead = async (req: Request, res: Response, next: NextFunctio
 };
 
 // Helper: create a notification
-export async function createNotification(userId: string, type: string, title: string, message: string) {
-  return prisma.notification.create({ data: { userId, type, title, message } });
+export async function createNotification(
+  userId: string,
+  type: string,
+  title: string,
+  message: string,
+  channel: NotificationChannel = NotificationChannel.IN_APP,
+  metadata?: unknown
+) {
+  return prisma.notification.create({ data: { userId, type, title, message, channel, metadata: metadata as any } });
 }
